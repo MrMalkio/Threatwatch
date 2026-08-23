@@ -28,9 +28,7 @@ jobs:
           base64 --decode payload.b64 > payload.zip
           unzip -o payload.zip -d .
           rm -f payload.b64 payload.zip payload.part-*
-          rm -f .github/workflows/apply-payload.yml
-          rm -f .github/workflows/test.yml
-          rm -f .remediation-trigger
+          rm -f .remediation-trigger*
 
       - uses: actions/setup-node@v4
         with:
@@ -39,10 +37,11 @@ jobs:
       - name: Verify repaired build
         run: npm run check
 
-      - name: Commit repaired repository
+      - name: Commit repaired source without workflow mutations
         shell: bash
         run: |
           set -euo pipefail
+          git checkout HEAD -- .github/workflows
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
