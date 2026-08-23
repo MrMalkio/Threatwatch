@@ -1,22 +1,24 @@
 name: Apply audit remediation payload
 
 on:
-  push:
-    branches:
-      - main
-      - fix/audit-remediation-v2
-    paths:
-      - .github/workflows/apply-payload.yml
-      - payload.part-*
+  pull_request:
+    types: [closed]
 
 permissions:
   contents: write
 
+concurrency:
+  group: threatwatch-audit-remediation
+  cancel-in-progress: false
+
 jobs:
   apply:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Decode repaired repository
         shell: bash
@@ -28,6 +30,7 @@ jobs:
           rm -f payload.b64 payload.zip payload.part-*
           rm -f .github/workflows/apply-payload.yml
           rm -f .github/workflows/test.yml
+          rm -f .remediation-trigger
 
       - uses: actions/setup-node@v4
         with:
@@ -47,4 +50,4 @@ jobs:
             exit 0
           fi
           git commit -m "Apply Threatwatch audit remediation"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin HEAD:main
