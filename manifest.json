@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Threatwatch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Contain redirects, popunders, fake verification traps, hostile overlays, and other abusive behavior on sites you choose to protect.",
   "minimum_chrome_version": "145",
   "permissions": [
@@ -15,8 +15,14 @@
     "webNavigation"
   ],
   "host_permissions": ["<all_urls>"],
-  "background": {"service_worker": "src/background.js", "type": "module"},
-  "action": {"default_title": "Threatwatch", "default_popup": "src/ui/popup.html"},
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Threatwatch",
+    "default_popup": "src/ui/popup.html"
+  },
   "options_page": "src/ui/options.html",
   "content_scripts": [
     {

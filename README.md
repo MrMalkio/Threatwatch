@@ -1,128 +1,130 @@
 # Threatwatch
 
-Threatwatch is a Chrome Manifest V3 extension for containing hostile web behavior on sites you choose to protect.
+Threatwatch is a Chrome Manifest V3 extension that contains hostile browser behavior on sites the user selects.
 
-It is built for pages that use click hijacking, popunders, rotating redirect domains, fake verification prompts, suspicious clipboard writes, malicious download lures, invisible click overlays, and abusive permission prompts.
+It targets click hijacking, popunders, rotating redirect domains, fake verification prompts, suspicious clipboard writes, executable download lures, invisible click overlays, and abusive permission prompts.
 
-Threatwatch does not depend on a permanent list of ad domains. In Strict and Learn modes, unexpected top-level exits from a protected site are treated as hostile unless you explicitly allow the destination.
-
-## Current status
-
-Version `0.1.0` is a working developer build.
-
-Default protected profiles:
-
-- `cineby.tech` in Strict mode
-- `vumoo.to` in Strict mode
-
-You can add or remove sites from the extension UI.
-
-## What it blocks
-
-- Cross-site top-level navigation initiated by protected pages
-- Popups and popunders spawned from protected tabs
-- `window.open()` attempts to external or blank targets on Strict/Learn sites
-- Programmatic external anchor clicks on Strict/Learn sites
-- Custom-protocol launches such as `intent:`, `ms-*`, or other non-web schemes
-- Suspicious clipboard writes that resemble ClickFix command payloads
-- High-risk executable or script downloads initiated from protected pages
-- Browser notification prompts, popups, and automatic multi-download permission on protected sites
-- Large transparent click-capture overlays when the detector is enabled
-- Known domains you place on the global block list
-
-It warns on page text that resembles fake CAPTCHA or ClickFix instructions.
+Version `0.2.0` repairs the state, mode, logging, profile-collision, script-registration, URL-sanitization, popup, and overlay defects found in the first audit.
 
 ## Modes
 
-### Normal
+| Defense | Normal | Strict | Learn |
+|---|---:|---:|---:|
+| Global block list | Block | Block | Block |
+| Notifications, popups, automatic multi-download permission | Block | Block | Block |
+| Unknown external web navigation | Log and allow | Block and log | Block, log, mark for review |
+| Non-web protocol launch | Allow | Block | Block |
+| Suspicious executable or script download | Allow | Block | Block |
+| Suspicious command clipboard write | Allow | Block | Block |
+| ClickFix text warning | Off | On | On |
+| Transparent click-overlay neutralization | Off | On | On |
 
-Blocks known-bad destinations and applies browser permission hardening. Unknown external navigation is logged rather than blanket-blocked.
+Normal mode does not run the MAIN-world popup or clipboard guards.
 
-### Strict
+## Default profiles
 
-Blocks unexpected external top-level navigation, popups, suspicious downloads, dangerous protocol launches, suspicious clipboard payloads, and hostile overlay patterns.
+- `cineby.tech`, Strict
+- `vumoo.to`, Strict
 
-### Learn
+Duplicate canonical domains are rejected. Profile IDs are created by the service worker and checked for uniqueness before registered scripts or DNR rules are generated.
 
-Uses Strict containment for top-level exits, then records attempted destinations so you can decide what to allow or permanently block.
+## Protection layers
+
+1. Chrome dynamic DNR rules block unexpected top-level exits from Strict and Learn profiles.
+2. A MAIN-world guard blocks blank popup variants and non-web protocols on Strict and Learn profiles.
+3. A separate MAIN-world guard blocks suspicious command clipboard writes on Strict and Learn profiles when enabled.
+4. The isolated content bridge applies the mode matrix, logs Normal-mode exits, blocks risky links in Strict and Learn, warns on ClickFix text, and neutralizes likely click overlays.
+5. Browser navigation listeners record attempts stopped before commit and flag any external navigation that still commits from Strict or Learn.
+6. The download monitor cancels risky executable or script downloads only when the profile policy permits that defense.
+7. Chrome content settings block notifications, popups, and automatic multi-download permission for enabled profiles.
 
 ## Install locally
 
-Threatwatch currently targets Chrome 145 or newer.
+Threatwatch requires Chrome 145 or newer.
 
 1. Clone or download this repository.
 2. Open `chrome://extensions`.
 3. Turn on **Developer mode**.
 4. Click **Load unpacked**.
-5. Select the repository root, the folder containing `manifest.json`.
+5. Select the repository root, which contains `manifest.json`.
 6. Pin Threatwatch from the Chrome extensions menu.
 
-No build step and no npm install are required to load the extension.
+The extension has no runtime package dependencies and loads without a build step.
 
-## Development
+## Test
 
-Node is used only for tests.
+Node 22 is used by CI.
 
 ```bash
-npm test
+npm run check
 ```
 
-The extension itself is plain JavaScript, HTML, and CSS with no runtime dependencies and no remote code.
+The check command validates JavaScript syntax, the manifest, mode behavior, profile normalization, DNR and script ID uniqueness, URL sanitization, popup variants, scanner regressions, documentation links, and the removal of whole-state settings writes.
 
 ## Repository map
 
 ```text
 Threatwatch/
-├── manifest.json
+├── .github/workflows/ci.yml
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── EVENT_SCHEMA.md
+│   ├── PRIVACY.md
+│   ├── SPEC.md
+│   ├── TESTING.md
+│   └── THREAT_MODEL.md
 ├── src/
-│   ├── background.js
-│   ├── content-bridge.js
-│   ├── page-guard.js
-│   ├── clipboard-guard.js
-│   ├── download-guard.js
+│   ├── background/
+│   │   ├── download-monitor.js
+│   │   ├── events.js
+│   │   ├── navigation.js
+│   │   ├── protection.js
+│   │   └── storage.js
 │   ├── core/
-│   │   ├── defaults.js
+│   │   ├── constants.js
 │   │   ├── domain.js
+│   │   ├── policy.js
+│   │   ├── profiles.js
 │   │   ├── risk.js
 │   │   ├── rules.js
-│   │   └── storage.js
-│   └── ui/
-│       ├── popup.html
-│       ├── popup.js
-│       ├── options.html
-│       ├── options.js
-│       └── theme.css
-├── docs/
-│   ├── SPEC.md
-│   ├── THREAT_MODEL.md
-│   └── PRIVACY.md
-└── tests/
+│   │   └── sanitizer.js
+│   ├── ui/
+│   │   ├── options.html
+│   │   ├── options.js
+│   │   ├── popup.html
+│   │   ├── popup.js
+│   │   └── theme.css
+│   ├── background.js
+│   ├── clipboard-guard.js
+│   ├── content-bridge.js
+│   └── page-guard.js
+├── tests/
+│   ├── check-syntax.js
+│   ├── core.test.js
+│   ├── docs.test.js
+│   ├── guards.test.js
+│   └── smoke.test.js
+├── LICENSE
+├── manifest.json
+├── package.json
+└── README.md
 ```
 
-## Security model
+## State and failure handling
 
-Threatwatch uses layered containment:
+Configuration, events, and runtime health use separate Chrome storage keys. Configuration writes use one mutation queue. Event appends and clears use a second queue, so event traffic cannot replace profile settings.
 
-1. Chrome `declarativeNetRequest` rules block external navigation before it completes.
-2. A MAIN-world page guard intercepts common page APIs used for popunders and malicious clipboard tricks.
-3. An isolated content script watches clicks, downloads, overlays, and ClickFix-style text.
-4. `webNavigation.onCreatedNavigationTarget` catches new tabs/windows spawned from protected tabs and closes disallowed ones.
-5. Chrome content settings block notifications, popups, and automatic downloads for protected domains.
-6. A local event log records what was attempted.
-
-See [docs/SPEC.md](docs/SPEC.md) and [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
-
-## Limits
-
-Threatwatch reduces browser-side abuse. It is not an antivirus product, DNS filter, browser sandbox, or guarantee that a hostile site is safe.
-
-A malicious page can change tactics. Browser exploits, compromised extensions, malicious files opened outside Chrome, social engineering that convinces a user to disable protections, and attacks outside the extension's permission boundary remain possible.
+A protection update registers and verifies missing MAIN-world scripts before stale guards are removed. DNR rules are replaced atomically. The active configuration is written only after the new protection set is ready. A failed registration leaves the previous guards in place and marks runtime health as degraded.
 
 ## Privacy
 
-Threatwatch has no telemetry and no server component. Settings and threat events stay in Chrome local extension storage. Logged URLs have query strings and fragments removed before storage.
+Threatwatch has no telemetry, server, remote code, or externally connectable API. Event URLs are sanitized at the persistence boundary. HTTP and HTTPS queries, fragments, and credentials are removed. Non-web schemes retain the scheme only. Malformed values become `[invalid-url]`.
 
-See [docs/PRIVACY.md](docs/PRIVACY.md).
+See [Privacy](docs/PRIVACY.md), [Threat model](docs/THREAT_MODEL.md), and [Event schema](docs/EVENT_SCHEMA.md).
+
+## Limits
+
+Threatwatch reduces selected browser-side abuse. It is not antivirus software, DNS filtering, an endpoint sandbox, or proof that a hostile site is safe. Browser defects, malicious extensions with broader permissions, unsafe user exceptions, malicious files opened outside Chrome, and tactics outside the monitored behaviors remain possible.
 
 ## License
 

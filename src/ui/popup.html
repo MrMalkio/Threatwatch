@@ -1,1 +1,61 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Threatwatch</title><link rel="stylesheet" href="theme.css"><style>body{width:360px;min-height:420px;padding:14px}h1{font-size:17px;margin:0}.hero{padding:13px;border-radius:12px;background:#101828;border:1px solid #1d2939}.stat{font-size:28px;font-weight:800}.events{display:grid;gap:8px;max-height:170px;overflow:auto}.event{border-left:2px solid #475467;padding-left:9px}.event.high{border-color:#f04438}.event.medium{border-color:#f79009}.event-title{font-size:12px;font-weight:700}.event-detail{font-size:11px;color:#98a2b3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.footer{margin-top:12px;display:flex;justify-content:space-between}</style></head><body><div class="row between"><h1>Threatwatch</h1><span id="status" class="pill off">Checking</span></div><div class="hero stack" style="margin-top:12px"><div><div class="muted small">Current site</div><strong id="site">...</strong></div><div class="row between"><div><div class="muted small">Logged events</div><div id="count" class="stat">0</div></div><button id="protect" class="primary">Protect site</button></div></div><div id="controls" class="card stack" style="margin-top:10px;display:none"><label class="small muted">Mode<select id="mode"><option value="normal">Normal</option><option value="strict">Strict</option><option value="learn">Learn</option></select></label><button id="disable">Disable protection</button><button id="reload">Reload tab to apply hooks</button></div><div class="card" style="margin-top:10px"><strong class="small">Recent activity</strong><div id="events" class="events" style="margin-top:8px"></div></div><div class="footer"><button id="settings">Settings</button><span class="muted small">v0.1.0</span></div><script type="module" src="popup.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Threatwatch</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body class="popup">
+  <div class="row between">
+    <h1>Threatwatch</h1>
+    <span id="health" class="status">Loading</span>
+  </div>
+  <p id="domain" class="muted small"></p>
+  <p id="message" class="error" role="status"></p>
+
+  <section id="unprotected" class="card stack hidden">
+    <strong>This site is not protected.</strong>
+    <label>
+      Mode
+      <select id="new-mode">
+        <option value="strict">Strict</option>
+        <option value="learn">Learn</option>
+        <option value="normal">Normal</option>
+      </select>
+    </label>
+    <button id="protect" class="primary">Protect this site</button>
+  </section>
+
+  <section id="protected" class="card stack hidden">
+    <div class="row between">
+      <strong id="profile-label"></strong>
+      <label class="checkbox-row small">
+        <input id="enabled" type="checkbox">
+        Enabled
+      </label>
+    </div>
+    <label>
+      Mode
+      <select id="mode">
+        <option value="normal">Normal</option>
+        <option value="strict">Strict</option>
+        <option value="learn">Learn</option>
+      </select>
+    </label>
+    <div class="small muted"><span id="event-count">0</span> local events for this profile</div>
+  </section>
+
+  <section class="section">
+    <h2>Recent events</h2>
+    <div id="events" class="card"></div>
+  </section>
+
+  <div class="section row between">
+    <button id="options" class="ghost">Open settings</button>
+    <button id="retry" class="ghost hidden">Retry sync</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

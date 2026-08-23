@@ -1,1 +1,100 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Threatwatch Settings</title><link rel="stylesheet" href="theme.css"><style>body{max-width:980px;margin:0 auto;padding:28px 20px 60px}h1{margin:0;font-size:28px}h2{font-size:18px}.grid{display:grid;gap:12px}.profile{display:grid;gap:10px}.controls{display:grid;grid-template-columns:1fr 140px auto;gap:8px}.tags{display:flex;gap:6px;flex-wrap:wrap}.form{display:grid;grid-template-columns:1fr 140px auto;gap:8px}.events{width:100%;border-collapse:collapse;font-size:12px}.events td,.events th{padding:8px;border-bottom:1px solid #1d2939;text-align:left}.url{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}@media(max-width:700px){.form,.controls{grid-template-columns:1fr}}</style></head><body><h1>Threatwatch</h1><p class="muted">Manage protected sites, allowlists, blocked domains, and the local threat log.</p><section><h2>Protected sites</h2><form id="add" class="form"><input id="domain" placeholder="example.com" required><select id="mode"><option value="strict">Strict</option><option value="learn">Learn</option><option value="normal">Normal</option></select><button class="primary">Add site</button></form><div id="profiles" class="grid" style="margin-top:12px"></div></section><section class="card" style="margin-top:20px"><h2>Global block list</h2><form id="block" class="form"><input id="blockDomain" placeholder="malicious.example"><div></div><button>Block domain</button></form><div id="blocks" class="tags" style="margin-top:10px"></div></section><section class="card" style="margin-top:20px"><div class="row between"><h2>Threat log</h2><button id="clear" class="danger">Clear log</button></div><div style="overflow:auto"><table class="events"><thead><tr><th>Time</th><th>Action</th><th>Type</th><th>Target</th></tr></thead><tbody id="events"></tbody></table></div></section><script type="module" src="options.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Threatwatch settings</title>
+  <link rel="stylesheet" href="theme.css">
+</head>
+<body>
+  <main>
+    <div class="row between">
+      <div>
+        <h1>Threatwatch</h1>
+        <p class="muted">Site profiles, navigation containment, and local threat events.</p>
+      </div>
+      <div class="row">
+        <span id="health" class="status">Loading</span>
+        <button id="retry" class="ghost">Retry protection sync</button>
+      </div>
+    </div>
+
+    <p id="message" class="error" role="status"></p>
+
+    <section class="section grid two">
+      <form id="add-profile" class="card stack">
+        <div>
+          <h2>Add protected site</h2>
+          <p class="muted small">Duplicate canonical domains are rejected by the service worker.</p>
+        </div>
+        <label>
+          Domain
+          <input id="profile-domain" type="text" placeholder="example.com" required autocomplete="off">
+        </label>
+        <label>
+          Label
+          <input id="profile-label" type="text" placeholder="Optional name" autocomplete="off">
+        </label>
+        <label>
+          Mode
+          <select id="profile-mode">
+            <option value="strict">Strict</option>
+            <option value="learn">Learn</option>
+            <option value="normal">Normal</option>
+          </select>
+        </label>
+        <button class="primary" type="submit">Add profile</button>
+      </form>
+
+      <form id="add-block" class="card stack">
+        <div>
+          <h2>Global domain block list</h2>
+          <p class="muted small">These domains are blocked across protected and unprotected tabs.</p>
+        </div>
+        <label>
+          Domain
+          <input id="block-domain" type="text" placeholder="bad.example" required autocomplete="off">
+        </label>
+        <button class="primary" type="submit">Block domain</button>
+        <div id="blocked-domains" class="tags"></div>
+      </form>
+    </section>
+
+    <section class="section">
+      <div class="row between">
+        <div>
+          <h2>Protected sites</h2>
+          <p class="muted small">Normal logs unexpected web exits. Strict and Learn contain them.</p>
+        </div>
+      </div>
+      <div id="profiles" class="stack"></div>
+    </section>
+
+    <section class="section card">
+      <div class="row between">
+        <div>
+          <h2>Threat events</h2>
+          <p class="muted small">Stored locally with URL queries, fragments, credentials, and non-web payloads removed.</p>
+        </div>
+        <button id="clear-events" class="danger">Clear events</button>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Action</th>
+              <th>Type</th>
+              <th>Target</th>
+              <th>Layer</th>
+            </tr>
+          </thead>
+          <tbody id="events"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="options.js"></script>
+</body>
+</html>

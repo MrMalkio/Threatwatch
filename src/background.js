@@ -1,175 +1,354 @@
-const KEY = "threatwatchState";
-const MODES = new Set(["normal", "strict", "learn"]);
-const DEFAULT_PROFILES = [
-  profile("cineby.tech", "Cineby"),
-  profile("vumoo.to", "Vumoo")
-];
+import {
+  CONTENT_EVENT_TYPES,
+  RISKY_EXTENSIONS
+} from "./core/constants.js";
+import {
+  findProfileForUrl,
+  normalizeDomain,
+  uniqueDomains
+} from "./core/domain.js";
+import { getEffectivePolicy } from "./core/policy.js";
+import {
+  assertProfileIntegrity,
+  assertUniqueProfileDomain,
+  createProfile,
+  getProfileById,
+  normalizeConfig,
+  PROFILE_SECURITY_FLAGS
+} from "./core/profiles.js";
+import { sanitizeEventType, sanitizeLabel } from "./core/sanitizer.js";
+import { registerDownloadMonitor } from "./background/download-monitor.js";
+import { appendEvent, clearEvents } from "./background/events.js";
+import {
+  bootstrapTabContexts,
+  registerNavigationHandlers,
+  rememberTabContext
+} from "./background/navigation.js";
+import {
+  markProtectionDegraded,
+  markProtectionHealthy,
+  prepareProtectionUpdate,
+  reconcileProtection
+} from "./background/protection.js";
+import {
+  initializeStorage,
+  readConfig,
+  readEventStore,
+  readRuntimeState,
+  runConfigExclusive,
+  writeConfig
+} from "./background/storage.js";
 
-function profile(domain, label = domain) {
-  return {
-    id: domain.replace(/[^a-z0-9]+/g, "-"), label, domain, enabled: true, mode: "strict",
-    allowedTopLevelDomains: [domain], blockNotifications: true, blockPopups: true,
-    blockAutomaticDownloads: true, blockSuspiciousClipboard: true,
-    blockSuspiciousDownloads: true, removeClickOverlays: true
-  };
-}
+let extensionInitialization;
 
-function normalizeDomain(input = "") {
+async function reportProtectionFailure(configRevision, error) {
   try {
-    const raw = String(input).trim().toLowerCase();
-    const u = new URL(raw.includes("://") ? raw : `https://${raw}`);
-    return u.hostname.replace(/^www\./, "").replace(/\.$/, "");
-  } catch { return ""; }
-}
-
-function host(url = "") { try { return new URL(url).hostname.toLowerCase(); } catch { return ""; } }
-function matchesDomain(h, d) { return h === d || h.endsWith(`.${d}`); }
-function cleanUrl(url = "") {
-  try { const u = new URL(url); return /^https?:$/.test(u.protocol) ? `${u.origin}${u.pathname}`.slice(0, 500) : `${u.protocol}${u.pathname}`.slice(0,500); }
-  catch { return String(url).slice(0,500); }
-}
-function findProfile(state, url) {
-  const h = host(url);
-  return state.profiles.find(p => p.enabled && matchesDomain(h, p.domain)) || null;
-}
-function allowed(url, p) {
-  const h = host(url);
-  return [p.domain, ...(p.allowedTopLevelDomains || [])].some(d => matchesDomain(h, d));
-}
-
-async function getState() {
-  const got = await chrome.storage.local.get(KEY);
-  const s = got[KEY];
-  if (s) return normalizeState(s);
-  const initial = normalizeState({ profiles: DEFAULT_PROFILES, blockedDomains: [], events: [] });
-  await chrome.storage.local.set({ [KEY]: initial });
-  return initial;
-}
-function normalizeState(input = {}) {
-  const profiles = Array.isArray(input.profiles) ? input.profiles : DEFAULT_PROFILES;
-  return {
-    profiles: profiles.map(p => {
-      const d = normalizeDomain(p.domain);
-      return d ? { ...profile(d, p.label || d), ...p, domain: d, id: p.id || d.replace(/[^a-z0-9]+/g,"-"), mode: MODES.has(p.mode) ? p.mode : "strict", allowedTopLevelDomains: [...new Set([d, ...((p.allowedTopLevelDomains || []).map(normalizeDomain).filter(Boolean))])] } : null;
-    }).filter(Boolean),
-    blockedDomains: [...new Set((input.blockedDomains || []).map(normalizeDomain).filter(Boolean))],
-    events: Array.isArray(input.events) ? input.events.slice(0, 750) : []
-  };
-}
-async function saveState(s) { const n = normalizeState(s); await chrome.storage.local.set({ [KEY]: n }); return n; }
-
-async function syncProtection(state) {
-  await syncRules(state);
-  await syncSettings(state);
-  await syncMainScripts(state);
-}
-
-async function syncRules(state) {
-  const old = await chrome.declarativeNetRequest.getDynamicRules();
-  const rules = [];
-  let id = 1000;
-  for (const p of state.profiles) {
-    if (!p.enabled || !["strict","learn"].includes(p.mode)) continue;
-    const excludes = [...new Set([p.domain, ...(p.allowedTopLevelDomains || [])])];
-    rules.push({ id: id++, priority: 10, action: { type: "block" }, condition: { initiatorDomains: [p.domain], excludedRequestDomains: excludes, resourceTypes: ["main_frame"] } });
-    rules.push({ id: id++, priority: 9, action: { type: "block" }, condition: { topDomains: [p.domain], excludedRequestDomains: excludes, resourceTypes: ["main_frame"] } });
+    await markProtectionDegraded(configRevision, error);
+  } catch {
+    // A storage failure must not replace the original protection error.
   }
-  for (const d of state.blockedDomains) {
-    rules.push({ id: id++, priority: 20, action: { type: "block" }, condition: { requestDomains: [d], resourceTypes: ["main_frame","sub_frame","script","xmlhttprequest","media","object","other"] } });
+
+  try {
+    await appendEvent({
+      type: "protection-error",
+      action: "degraded",
+      sourceLayer: "background"
+    });
+  } catch {
+    // Event logging is secondary to retaining the active protection set.
   }
-  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: old.map(r => r.id), addRules: rules });
 }
 
-async function syncSettings(state) {
-  await Promise.all([
-    chrome.contentSettings.notifications.clear({scope:"regular"}),
-    chrome.contentSettings.popups.clear({scope:"regular"}),
-    chrome.contentSettings.automaticDownloads.clear({scope:"regular"})
-  ]);
-  const jobs = [];
-  for (const p of state.profiles.filter(x => x.enabled)) {
-    for (const scheme of ["http","https"]) {
-      const primaryPattern = `${scheme}://[*.]${p.domain}/*`;
-      if (p.blockNotifications) jobs.push(chrome.contentSettings.notifications.set({primaryPattern, setting:"block"}));
-      if (p.blockPopups) jobs.push(chrome.contentSettings.popups.set({primaryPattern, setting:"block"}));
-      if (p.blockAutomaticDownloads) jobs.push(chrome.contentSettings.automaticDownloads.set({primaryPattern, setting:"block"}));
+async function initializeExtension() {
+  if (extensionInitialization) return extensionInitialization;
+
+  extensionInitialization = (async () => {
+    await initializeStorage();
+    const config = await readConfig();
+
+    try {
+      await reconcileProtection(config);
+      await markProtectionHealthy(config.revision);
+    } catch (error) {
+      await reportProtectionFailure(config.revision, error);
     }
+
+    try {
+      await bootstrapTabContexts(config);
+    } catch {
+      // Tab contexts are rebuilt by bridge initialization and later navigation.
+    }
+
+    return config;
+  })();
+
+  try {
+    return await extensionInitialization;
+  } catch (error) {
+    extensionInitialization = undefined;
+    throw error;
   }
-  await Promise.all(jobs);
 }
 
-async function syncMainScripts(state) {
-  const existing = await chrome.scripting.getRegisteredContentScripts();
-  const ids = existing.filter(s => s.id.startsWith("tw-")).map(s => s.id);
-  if (ids.length) await chrome.scripting.unregisterContentScripts({ ids });
-  const scripts = [];
-  for (const p of state.profiles) {
-    if (!p.enabled || !["strict","learn"].includes(p.mode)) continue;
-    const matches = [`http://${p.domain}/*`,`https://${p.domain}/*`,`http://*.${p.domain}/*`,`https://*.${p.domain}/*`];
-    scripts.push({ id:`tw-${p.id}-base`, matches, js:["src/page-guard.js"], runAt:"document_start", allFrames:true, matchOriginAsFallback:true, world:"MAIN", persistAcrossSessions:true });
-    if (p.blockSuspiciousClipboard) scripts.push({ id:`tw-${p.id}-clip`, matches, js:["src/clipboard-guard.js"], runAt:"document_start", allFrames:true, matchOriginAsFallback:true, world:"MAIN", persistAcrossSessions:true });
-  }
-  if (scripts.length) await chrome.scripting.registerContentScripts(scripts);
-}
+async function mutateConfig(mutator) {
+  await initializeExtension();
 
-let eventQueue = Promise.resolve();
-function logEvent(raw) {
-  eventQueue = eventQueue.catch(()=>{}).then(async () => {
-    const s = await getState();
-    s.events.unshift({ id: crypto.randomUUID(), timestamp: Date.now(), type: String(raw.type || "unknown").slice(0,64), severity: raw.severity || "medium", action: raw.action || "observed", profileId: raw.profileId || "", sourceUrl: cleanUrl(raw.sourceUrl || ""), targetUrl: cleanUrl(raw.targetUrl || ""), detail: String(raw.detail || "").slice(0,500) });
-    s.events = s.events.slice(0,750);
-    await saveState(s);
+  return runConfigExclusive(async () => {
+    const currentConfig = await readConfig();
+    const draft = structuredClone(currentConfig);
+    const mutated = await mutator(draft);
+    const nextConfig = normalizeConfig(mutated || draft);
+    nextConfig.revision = currentConfig.revision + 1;
+    assertProfileIntegrity(nextConfig);
+
+    let cleanupStaleScripts;
+    try {
+      cleanupStaleScripts = await prepareProtectionUpdate(currentConfig, nextConfig);
+    } catch (error) {
+      await reportProtectionFailure(currentConfig.revision, error);
+      throw error;
+    }
+
+    try {
+      await writeConfig(nextConfig);
+    } catch (error) {
+      try {
+        const rollbackCleanup = await prepareProtectionUpdate(nextConfig, currentConfig);
+        await rollbackCleanup();
+      } catch {
+        // Runtime health below records the failed rollback.
+      }
+      await reportProtectionFailure(currentConfig.revision, error);
+      throw error;
+    }
+
+    try {
+      await cleanupStaleScripts();
+      await markProtectionHealthy(nextConfig.revision);
+    } catch (error) {
+      await reportProtectionFailure(nextConfig.revision, error);
+    }
+
+    return nextConfig;
   });
-  return eventQueue;
 }
 
-chrome.runtime.onInstalled.addListener(async () => syncProtection(await getState()));
-chrome.runtime.onStartup.addListener(async () => syncProtection(await getState()));
+function requireProfile(config, profileId) {
+  const profile = getProfileById(config, profileId);
+  if (!profile) throw new Error("Profile not found.");
+  return profile;
+}
 
-chrome.webNavigation.onCreatedNavigationTarget.addListener(async d => {
-  let source; try { source = await chrome.tabs.get(d.sourceTabId); } catch { return; }
-  const s = await getState(); const p = findProfile(s, source.url);
-  if (!p || !["strict","learn"].includes(p.mode) || allowed(d.url,p)) return;
-  try { await chrome.tabs.remove(d.tabId); } catch {}
-  await logEvent({ type:"spawned-navigation", severity:"high", action:"closed", profileId:p.id, sourceUrl:source.url, targetUrl:d.url, detail:"Closed a new tab/window spawned from a protected site." });
+function contentEventAllowed(profile, type) {
+  const policy = getEffectivePolicy(profile);
+  const checks = {
+    "popup-blocked": policy.blockProtocols,
+    "protocol-blocked": policy.blockProtocols,
+    "clipboard-blocked": policy.blockClipboard,
+    "dangerous-download": policy.blockDownloads,
+    "external-navigation": policy.logExternalNavigation,
+    "clickfix-warning": policy.scanClickFix,
+    "click-overlay": policy.scanOverlays
+  };
+  return checks[type] === true;
+}
+
+async function handleContentEvent(message, sender) {
+  const sourceUrl = sender.tab?.url || sender.url || "";
+  const config = await readConfig();
+  const profile = findProfileForUrl(config, sourceUrl);
+  if (!profile) return null;
+
+  const type = sanitizeEventType(message.event?.type);
+  if (!CONTENT_EVENT_TYPES.has(type) || !contentEventAllowed(profile, type)) return null;
+
+  const policy = getEffectivePolicy(profile);
+  let action = message.event?.action;
+  if (type === "external-navigation") {
+    action = policy.blockExternalNavigation ? "blocked" : "observed";
+  }
+
+  return appendEvent({
+    type,
+    action,
+    profileId: profile.id,
+    sourceUrl,
+    targetUrl: message.event?.targetUrl || "",
+    sourceLayer: "content",
+    decisionCandidate: policy.recordDecisionCandidate
+  });
+}
+
+async function getStateSnapshot() {
+  const [config, eventStore, runtime] = await Promise.all([
+    readConfig(),
+    readEventStore(),
+    readRuntimeState()
+  ]);
+  return { config, events: eventStore.items, eventRevision: eventStore.revision, runtime };
+}
+
+async function routeMessage(message, sender) {
+  await initializeExtension();
+
+  switch (message.type) {
+    case "bridge-init": {
+      const config = await readConfig();
+      const sourceUrl = sender.tab?.url || sender.url || "";
+      const profile = findProfileForUrl(config, sourceUrl);
+      if (sender.tab?.id != null) {
+        rememberTabContext(sender.tab.id, sourceUrl, config).catch(() => undefined);
+      }
+      return {
+        active: Boolean(profile),
+        profile,
+        policy: profile ? getEffectivePolicy(profile) : null,
+        riskyExtensions: RISKY_EXTENSIONS
+      };
+    }
+
+    case "event":
+      return { event: await handleContentEvent(message, sender) };
+
+    case "state.get":
+      return getStateSnapshot();
+
+    case "url.status": {
+      const [config, eventStore, runtime] = await Promise.all([
+        readConfig(),
+        readEventStore(),
+        readRuntimeState()
+      ]);
+      const profile = findProfileForUrl(config, message.url || "", { enabledOnly: false });
+      const events = profile ? eventStore.items.filter((event) => event.profileId === profile.id) : [];
+      return { profile, eventCount: events.length, recentEvents: events.slice(0, 8), runtime };
+    }
+
+    case "profile.create": {
+      const config = await mutateConfig((draft) => {
+        const domain = assertUniqueProfileDomain(draft, message.profile?.domain);
+        draft.profiles.push(createProfile(domain, {
+          label: message.profile?.label || domain,
+          mode: message.profile?.mode || "strict"
+        }));
+        return draft;
+      });
+      const domain = normalizeDomain(message.profile?.domain);
+      return { config, profile: config.profiles.find((profile) => profile.domain === domain) };
+    }
+
+    case "profile.update": {
+      const config = await mutateConfig((draft) => {
+        const profile = requireProfile(draft, message.profileId);
+        const patch = message.patch || {};
+
+        if (Object.hasOwn(patch, "label")) profile.label = sanitizeLabel(patch.label, profile.domain);
+        if (Object.hasOwn(patch, "enabled")) profile.enabled = patch.enabled === true;
+        if (Object.hasOwn(patch, "mode")) profile.mode = patch.mode;
+
+        for (const flag of PROFILE_SECURITY_FLAGS) {
+          if (Object.hasOwn(patch, flag)) profile[flag] = patch[flag] === true;
+        }
+        return draft;
+      });
+      return { config, profile: getProfileById(config, message.profileId) };
+    }
+
+    case "profile.delete": {
+      const config = await mutateConfig((draft) => {
+        requireProfile(draft, message.profileId);
+        draft.profiles = draft.profiles.filter((profile) => profile.id !== message.profileId);
+        return draft;
+      });
+      return { config };
+    }
+
+    case "allowlist.add": {
+      const config = await mutateConfig((draft) => {
+        const profile = requireProfile(draft, message.profileId);
+        const domain = normalizeDomain(message.domain);
+        if (!domain) throw new Error("A valid destination domain is required.");
+        profile.allowedTopLevelDomains = uniqueDomains([
+          profile.domain,
+          ...(profile.allowedTopLevelDomains || []),
+          domain
+        ]);
+        return draft;
+      });
+      return { config, profile: getProfileById(config, message.profileId) };
+    }
+
+    case "allowlist.remove": {
+      const config = await mutateConfig((draft) => {
+        const profile = requireProfile(draft, message.profileId);
+        const domain = normalizeDomain(message.domain);
+        profile.allowedTopLevelDomains = uniqueDomains([
+          profile.domain,
+          ...(profile.allowedTopLevelDomains || []).filter((candidate) => candidate !== domain)
+        ]);
+        return draft;
+      });
+      return { config, profile: getProfileById(config, message.profileId) };
+    }
+
+    case "blocklist.add": {
+      const config = await mutateConfig((draft) => {
+        const domain = normalizeDomain(message.domain);
+        if (!domain) throw new Error("A valid blocked domain is required.");
+        draft.blockedDomains = uniqueDomains([...draft.blockedDomains, domain]);
+        return draft;
+      });
+      return { config };
+    }
+
+    case "blocklist.remove": {
+      const config = await mutateConfig((draft) => {
+        const domain = normalizeDomain(message.domain);
+        draft.blockedDomains = draft.blockedDomains.filter((candidate) => candidate !== domain);
+        return draft;
+      });
+      return { config };
+    }
+
+    case "events.clear":
+      return { events: (await clearEvents()).items };
+
+    case "protection.retry": {
+      const config = await readConfig();
+      try {
+        await reconcileProtection(config);
+        const runtime = await markProtectionHealthy(config.revision);
+        return { runtime };
+      } catch (error) {
+        const runtime = await markProtectionDegraded(config.revision, error);
+        await appendEvent({ type: "protection-error", action: "degraded", sourceLayer: "background" });
+        throw Object.assign(new Error(runtime.lastErrorCode), { cause: error });
+      }
+    }
+
+    default:
+      throw new Error("Unsupported Threatwatch request.");
+  }
+}
+
+registerNavigationHandlers({ readConfig, appendEvent });
+registerDownloadMonitor({ readConfig, appendEvent });
+
+chrome.runtime.onInstalled.addListener(() => {
+  extensionInitialization = undefined;
+  initializeExtension().catch(() => undefined);
 });
 
-chrome.downloads.onCreated.addListener(async item => {
-  if (!item.referrer) return;
-  const s = await getState(); const p = findProfile(s,item.referrer);
-  if (!p || !p.blockSuspiciousDownloads) return;
-  const candidate = (item.filename || item.finalUrl || item.url || "").toLowerCase().split(/[?#]/)[0];
-  const risky = [".exe",".msi",".msix",".bat",".cmd",".ps1",".vbs",".js",".scr",".hta",".reg",".lnk",".jar",".apk",".dmg",".pkg"].some(x => candidate.endsWith(x));
-  if (!risky) return;
-  try { await chrome.downloads.cancel(item.id); } catch { return; }
-  await logEvent({ type:"dangerous-download", severity:"high", action:"cancelled", profileId:p.id, sourceUrl:item.referrer, targetUrl:item.finalUrl || item.url, detail:"Cancelled a high-risk executable or script download." });
+chrome.runtime.onStartup.addListener(() => {
+  extensionInitialization = undefined;
+  initializeExtension().catch(() => undefined);
 });
 
-chrome.runtime.onMessage.addListener((m,sender,send) => {
-  (async () => {
-    const state = await getState();
-    if (m.type === "bridge-init") {
-      const p = findProfile(state, sender.tab?.url || sender.url || "");
-      return { active: !!p, profile:p };
-    }
-    if (m.type === "event") {
-      const p = findProfile(state, sender.tab?.url || m.event?.sourceUrl || "");
-      if (p) await logEvent({ ...m.event, profileId:p.id });
-      return {};
-    }
-    if (m.type === "get-state") return { state };
-    if (m.type === "get-url-status") { const p = findProfile(state,m.url); const events = p ? state.events.filter(e=>e.profileId===p.id) : []; return { profile:p, eventCount:events.length, recentEvents:events.slice(0,8) }; }
-    if (m.type === "save-state") { const saved = await saveState(m.state || {}); await syncProtection(saved); return { state:saved }; }
-    if (m.type === "upsert-profile") {
-      const d = normalizeDomain(m.profile?.domain); if (!d) throw new Error("Valid domain required");
-      const np = { ...profile(d,m.profile?.label || d), ...(m.profile || {}), domain:d, id:m.profile?.id || d.replace(/[^a-z0-9]+/g,"-") };
-      const i = state.profiles.findIndex(p=>p.id===np.id || p.domain===d); if (i>=0) state.profiles[i]=np; else state.profiles.push(np);
-      const saved = await saveState(state); await syncProtection(saved); return { state:saved, profile:np };
-    }
-    if (m.type === "clear-events") { state.events=[]; return { state:await saveState(state) }; }
-    return {};
-  })().then(r=>send({ok:true,...r})).catch(e=>send({ok:false,error:e.message}));
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  routeMessage(message, sender)
+    .then((result) => sendResponse({ ok: true, ...result }))
+    .catch((error) => sendResponse({ ok: false, error: error?.message || "Threatwatch request failed." }));
   return true;
 });
 
-getState().then(syncProtection).catch(()=>{});
+initializeExtension().catch(() => undefined);
