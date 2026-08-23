@@ -3,9 +3,11 @@ name: Apply audit remediation payload
 on:
   push:
     branches:
+      - main
       - fix/audit-remediation-v2
     paths:
       - .github/workflows/apply-payload.yml
+      - payload.part-*
 
 permissions:
   contents: write
