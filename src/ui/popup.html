@@ -3,58 +3,105 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>Threatwatch</title>
   <link rel="stylesheet" href="theme.css">
 </head>
 <body class="popup">
-  <div class="row between">
-    <h1>Threatwatch</h1>
-    <span id="health" class="status">Loading</span>
-  </div>
-  <p id="domain" class="muted small"></p>
-  <p id="message" class="error" role="status"></p>
+  <div class="screen-noise" aria-hidden="true"></div>
 
-  <section id="unprotected" class="card stack hidden">
-    <strong>This site is not protected.</strong>
-    <label>
-      Mode
-      <select id="new-mode">
-        <option value="strict">Strict</option>
-        <option value="learn">Learn</option>
-        <option value="normal">Normal</option>
-      </select>
-    </label>
-    <button id="protect" class="primary">Protect this site</button>
-  </section>
+  <main class="popup-shell">
+    <header class="popup-header">
+      <div class="popup-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <span class="brand-screen"></span>
+          <span class="brand-play"></span>
+          <span class="brand-sweep"></span>
+          <span class="brand-signal"></span>
+        </div>
+        <div>
+          <h1>Threatwatch</h1>
+          <p class="popup-tagline">Watching for threats while you watch.</p>
+        </div>
+      </div>
+      <span id="health" class="status">Loading</span>
+    </header>
 
-  <section id="protected" class="card stack hidden">
-    <div class="row between">
-      <strong id="profile-label"></strong>
-      <label class="checkbox-row small">
-        <input id="enabled" type="checkbox">
-        Enabled
-      </label>
+    <div class="popup-domain-strip">
+      <span id="domain">Checking current site</span>
     </div>
-    <label>
-      Mode
-      <select id="mode">
-        <option value="normal">Normal</option>
-        <option value="strict">Strict</option>
-        <option value="learn">Learn</option>
-      </select>
-    </label>
-    <div class="small muted"><span id="event-count">0</span> local events for this profile</div>
-  </section>
+    <p id="message" class="message error" role="status" aria-live="polite"></p>
 
-  <section class="section">
-    <h2>Recent events</h2>
-    <div id="events" class="card"></div>
-  </section>
+    <section id="unprotected" class="popup-card hidden">
+      <div class="popup-card-body">
+        <div class="popup-site-heading">
+          <span id="unprotected-avatar" class="site-avatar" aria-hidden="true">TW</span>
+          <div>
+            <span class="popup-state-label off-watch">Not under watch</span>
+            <strong class="popup-site-title">Protect this site</strong>
+          </div>
+        </div>
+        <p class="muted small">Add this hostname to your watchlist before browsing further.</p>
+        <label>
+          Watch mode
+          <select id="new-mode">
+            <option value="strict">Strict</option>
+            <option value="learn">Learn</option>
+            <option value="normal">Normal</option>
+          </select>
+        </label>
+        <button id="protect" class="button primary" type="button">Watch this site</button>
+      </div>
+    </section>
 
-  <div class="section row between">
-    <button id="options" class="ghost">Open settings</button>
-    <button id="retry" class="ghost hidden">Retry sync</button>
-  </div>
+    <section id="protected" class="popup-card hidden">
+      <div class="popup-card-body">
+        <div class="row between">
+          <div class="popup-site-heading">
+            <span id="protected-avatar" class="site-avatar" aria-hidden="true">TW</span>
+            <div>
+              <span id="profile-state" class="popup-state-label">Under watch</span>
+              <strong id="profile-label" class="popup-site-title"></strong>
+            </div>
+          </div>
+
+          <label class="profile-power" title="Pause or resume this profile">
+            <input id="enabled" type="checkbox" aria-label="Profile enabled">
+            <span class="switch-track"></span>
+          </label>
+        </div>
+
+        <div class="popup-controls">
+          <label>
+            Watch mode
+            <select id="mode">
+              <option value="normal">Normal</option>
+              <option value="strict">Strict</option>
+              <option value="learn">Learn</option>
+            </select>
+          </label>
+
+          <div class="popup-event-count">
+            <span>Local catches</span>
+            <strong id="event-count">0</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="popup-section">
+      <div class="popup-section-header">
+        <h2>Latest catches</h2>
+        <span class="eyebrow">Local only</span>
+      </div>
+      <div id="events" class="popup-event-list"></div>
+    </section>
+
+    <footer class="popup-footer">
+      <button id="options" class="button ghost" type="button">Open watchlist</button>
+      <button id="retry" class="button ghost hidden" type="button">Retry sync</button>
+    </footer>
+  </main>
 
   <script src="popup.js"></script>
 </body>
