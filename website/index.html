@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="Threatwatch is a free, local-first Chrome extension that watches streaming sites for redirects, popunders, fake verification traps, suspicious downloads, overlays, and other hostile browser behavior.">
+  <title>Threatwatch · Watching for threats while you watch</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="./" data-page="home">
+  <header data-site-header></header>
+  <main id="main">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <span class="kicker">Free browser protection for streaming-site risk</span>
+          <h1>Watch the stream. Watch the threats.</h1>
+          <p class="lead">Threatwatch contains redirects, popunders, fake verification prompts, suspicious downloads, hostile overlays, protocol launches, and other browser abuse on streaming-type sites you choose to protect.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="help/getting-started.html">Install the developer build</a>
+            <a class="button cyan" href="https://github.com/MrMalkio/Threatwatch" target="_blank" rel="noreferrer">View source on GitHub</a>
+          </div>
+          <div class="trust-strip">
+            <div class="trust-item"><strong>Local first</strong><span>No Threatwatch telemetry server in 0.4.0</span></div>
+            <div class="trust-item"><strong>No account</strong><span>Core protection works without sign-in</span></div>
+            <div class="trust-item"><strong>Open source</strong><span>Inspect the rules and protection code</span></div>
+            <div class="trust-item"><strong>Focused scope</strong><span>Streaming-site browser safety, not a catch-all security suite</span></div>
+          </div>
+        </div>
+
+        <div class="monitor-card" aria-label="Illustration of Threatwatch monitoring site activity">
+          <div class="monitor-top"><span class="live">Threat watch</span><span class="status-pill">Protection healthy</span></div>
+          <div class="channel">
+            <div class="channel-row"><span class="signal"></span><span class="channel-name">protected-site.example</span><span class="channel-meta">STRICT</span></div>
+            <div class="channel-row"><span class="signal red"></span><span class="channel-name">redirect attempt</span><span class="channel-meta">BLOCKED</span></div>
+            <div class="channel-row"><span class="signal amber"></span><span class="channel-name">forced download</span><span class="channel-meta">CANCELLED</span></div>
+            <div class="channel-row"><span class="signal"></span><span class="channel-name">internal playback navigation</span><span class="channel-meta">ALLOWED</span></div>
+          </div>
+          <div class="monitor-log">
+            <div class="log-line"><span>main_frame → outside.example</span><strong>closed</strong></div>
+            <div class="log-line"><span>window.open → about:blank</span><strong>blocked</strong></div>
+            <div class="log-line"><span>download → payload.exe</span><strong>cancelled</strong></div>
+            <div class="log-line"><span>clipboard → command pattern</span><strong>blocked</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section compact">
+      <div class="container callout cyan"><strong>The premise is simple:</strong> people will visit risky sites with or without a safety tool. Threatwatch is built to reduce the damage, show what the browser tried to do, and give the user tighter control over what gets through.</div>
+    </section>
+
+    <section class="section" id="protections">
+      <div class="container">
+        <div class="section-header"><span class="eyebrow">What it watches</span><h2>Protection built around the tricks these sites actually use</h2><p>Threatwatch combines browser network rules, page-level interception, navigation correlation, permission hardening, and a local event log.</p></div>
+        <div class="grid-3">
+          <article class="card"><div class="icon">↗</div><h3>Redirect and popunder containment</h3><p>Unexpected top-level exits and spawned tabs can be blocked before they carry you into a rotating ad or scam destination.</p></article>
+          <article class="card"><div class="icon">↓</div><h3>Download containment</h3><p>Known risky URLs and response headers are blocked early. Downloads that still reach Chrome are paused, cancelled, and logged.</p></article>
+          <article class="card"><div class="icon">⌘</div><h3>ClickFix and clipboard defense</h3><p>Threatwatch warns on fake verification patterns and can block suspicious command payloads written to the clipboard.</p></article>
+          <article class="card"><div class="icon">▧</div><h3>Overlay cleanup</h3><p>Likely transparent click-capture overlays can lose pointer access rather than stealing the next click.</p></article>
+          <article class="card"><div class="icon">◎</div><h3>Permission hardening</h3><p>Protected domains can be denied notifications, popups, and automatic multi-download permission through Chrome settings.</p></article>
+          <article class="card"><div class="icon">●</div><h3>Local catch log</h3><p>Threatwatch keeps a local record of interventions using sanitized URLs, so you can see what it stopped without preserving secret query data.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-header"><span class="eyebrow">Three watch modes</span><h2>Choose how hard Threatwatch should intervene</h2></div>
+        <div class="grid-3">
+          <article class="card mode-strict"><div class="icon">S</div><h3>Strict</h3><p>Blocks unexpected external navigation and runs the full protocol, download, clipboard, ClickFix, and overlay defenses.</p></article>
+          <article class="card mode-learn"><div class="icon">L</div><h3>Learn</h3><p>Uses Strict containment and marks navigation decisions for review, useful when you are figuring out what a new site actually needs.</p></article>
+          <article class="card mode-normal"><div class="icon">N</div><h3>Normal</h3><p>Logs unexpected web exits but does not run the Strict-only page defenses. Use it when you want observation with less intervention.</p></article>
+        </div>
+        <div class="button-row"><a class="button" href="help/modes.html">Read the mode guide</a></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container split">
+        <div><span class="eyebrow">What it is not</span><h2>Threatwatch reduces browser risk. It does not make a risky site safe.</h2></div>
+        <div>
+          <ul class="check-list cross-list">
+            <li>It is not antivirus or endpoint security.</li>
+            <li>It does not guarantee that every malicious action will be detected or stopped.</li>
+            <li>It does not determine whether third-party content is lawful, licensed, official, or authorized.</li>
+            <li>It is not a streaming provider, media host, or public directory of replacement streaming domains.</li>
+            <li>A site working well does not mean the site has lower observed risk.</li>
+          </ul>
+          <a class="button" href="safety/index.html">Read the safety model</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container callout">
+        <span class="eyebrow">Coming later</span>
+        <h2>Community-sourced domain reputation</h2>
+        <p>Threatwatch is being designed so users can contribute evidence about whether a domain works, how the experience felt, what threat activity was observed, and how strong the evidence is. Those are separate measurements. A working player never becomes a green safety badge.</p>
+        <div class="button-row"><a class="button" href="faq/index.html#community">Read the community FAQ</a><a class="button" href="https://github.com/MrMalkio/Threatwatch/issues/6" target="_blank" rel="noreferrer">View the roadmap epic</a></div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-header"><span class="eyebrow">Get oriented</span><h2>Start with the guide that matches what you are doing</h2></div>
+        <div class="grid-4">
+          <a class="card help-card" href="help/getting-started.html"><div class="icon">1</div><h3>Getting started</h3><span>Install, load unpacked, add a site, and confirm protection health.</span></a>
+          <a class="card help-card" href="help/downloads.html"><div class="icon">↓</div><h3>Download protection</h3><span>How the early blocking layers and Chrome fallback work.</span></a>
+          <a class="card help-card" href="help/false-positives.html"><div class="icon">?</div><h3>False positives</h3><span>Review a block and make the narrowest safe change.</span></a>
+          <a class="card help-card" href="faq/index.html"><div class="icon">i</div><h3>FAQ</h3><span>Answers about privacy, antivirus, permissions, modes, and scope.</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer data-site-footer></footer>
+  <script src="assets/site.js"></script>
+</body>
+</html>

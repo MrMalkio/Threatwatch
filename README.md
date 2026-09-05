@@ -4,7 +4,26 @@ Threatwatch is a Chrome Manifest V3 extension that watches streaming sites for h
 
 It targets click hijacking, popunders, rotating redirects, fake verification prompts, suspicious clipboard writes, forced downloads, executable lures, invisible click overlays, and abusive permission prompts.
 
-Version `0.4.0` adds a compact watchlist and a new visual system built around the product idea: watching for threats while the user watches TV and movies. Site profiles now stay collapsed until opened, support search, mode filters, activity sorting, event counts, and a contained scroll area.
+Version `0.4.0` adds a compact watchlist and a visual system built around the product idea: watching for threats while the user watches TV and movies. Site profiles stay collapsed until opened, support search, mode filters, activity sorting, event counts, and a contained scroll area.
+
+## Public website
+
+The static public website lives in [`website/`](website/README.md). It includes:
+
+- product homepage
+- installation and help guides
+- watch-mode and download documentation
+- false-positive guidance
+- FAQ
+- public safety model
+- release changelog
+- Privacy Policy
+- Terms of Use
+- Acceptable Use Policy
+
+The site has no Threatwatch analytics, remote JavaScript, external fonts, or advertising scripts. `.github/workflows/pages.yml` is ready to publish the `website/` directory through GitHub Pages once Pages is enabled with GitHub Actions as the source.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for product history and [`docs/LEGAL_REVIEW_CHECKLIST.md`](docs/LEGAL_REVIEW_CHECKLIST.md) before a paid, account-based, or community-backend launch.
 
 ## Interface
 
@@ -49,14 +68,14 @@ Threatwatch uses several checkpoints on Strict and Learn profiles:
 5. The downloads monitor pre-pauses known protected downloads, runs at both creation and filename determination, cancels the item, and removes a file that raced to completion when Chrome exposes one.
 6. A local notice and threat event record what Threatwatch stopped.
 
-This is browser containment, not antivirus replacement. Chrome extensions cannot promise they will always act before endpoint security, the operating system, another browser extension, or a browser defect. The first three checkpoints are designed to stop common attempts before a file reaches Chrome's completed-download path.
+This is browser containment, not antivirus replacement. Chrome extensions cannot promise they will always act before endpoint security, the operating system, another browser extension, or a browser defect.
 
 ## Default profiles
 
 - `cineby.tech`, Strict
 - `vumoo.to`, Strict
 
-Profiles can be added, removed, disabled, switched between modes, and assigned explicit top-level destination allowlists.
+Profiles can be added, removed, disabled, switched between modes, and assigned explicit top-level destination allowlists. A profile is a protection configuration, not an endorsement or safety certification.
 
 ## Install locally
 
@@ -80,7 +99,7 @@ No runtime package install or build step is required.
 npm run check
 ```
 
-The check command runs syntax validation, policy tests, guard tests, interface checks, manifest checks, and documentation checks.
+The check command runs syntax validation, policy tests, guard tests, interface checks, website checks, manifest checks, and documentation checks.
 
 ## Repository map
 
@@ -88,7 +107,18 @@ The check command runs syntax validation, policy tests, guard tests, interface c
 Threatwatch/
 ├── manifest.json
 ├── README.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── SECURITY.md
 ├── LICENSE
+├── website/
+│   ├── index.html
+│   ├── help/
+│   ├── faq/
+│   ├── safety/
+│   ├── changelog/
+│   ├── legal/
+│   └── assets/
 ├── src/
 │   ├── background.js
 │   ├── content-bridge.js
@@ -120,6 +150,7 @@ Threatwatch/
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   ├── EVENT_SCHEMA.md
+│   ├── LEGAL_REVIEW_CHECKLIST.md
 │   ├── PRIVACY.md
 │   ├── SPEC.md
 │   ├── TESTING.md
@@ -130,21 +161,25 @@ Threatwatch/
     ├── docs.test.js
     ├── guards.test.js
     ├── smoke.test.js
-    └── ui.test.js
+    ├── ui.test.js
+    └── website.test.js
 ```
 
-## Documentation
+## Engineering documentation
 
 - [Specification](docs/SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Threat model](docs/THREAT_MODEL.md)
 - [Event schema](docs/EVENT_SCHEMA.md)
 - [Testing](docs/TESTING.md)
-- [Privacy](docs/PRIVACY.md)
+- [Engineering privacy notes](docs/PRIVACY.md)
+- [Public release legal checklist](docs/LEGAL_REVIEW_CHECKLIST.md)
 
 ## Privacy
 
-Threatwatch has no telemetry and no server component. Configuration, watchlist preferences, and threat events stay inside the browser. Persisted threat URLs have credentials, query strings, fragments, control characters, and non-web payloads removed.
+Threatwatch 0.4.0 has no telemetry backend. Configuration, watchlist preferences, and threat events stay inside the browser. Persisted threat URLs have credentials, query strings, fragments, control characters, and non-web payloads removed.
+
+The public-facing policy is [`website/legal/privacy.html`](website/legal/privacy.html).
 
 ## License
 

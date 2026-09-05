@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://mrmalkio.github.io/Threatwatch/sitemap.xml
