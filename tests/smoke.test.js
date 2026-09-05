@@ -8,7 +8,7 @@ const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
 test("manifest is MV3 and targets Chrome 145 or newer", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.ok(Number(manifest.minimum_chrome_version) >= 145);
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.4.0");
 });
 
 test("manifest and registered-guard source files exist", () => {
