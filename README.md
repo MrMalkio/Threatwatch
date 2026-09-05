@@ -1,10 +1,27 @@
 # Threatwatch
 
-Threatwatch is a Chrome Manifest V3 extension that contains hostile browser behavior on sites selected by the user.
+Threatwatch is a Chrome Manifest V3 extension that watches streaming sites for hostile browser behavior.
 
 It targets click hijacking, popunders, rotating redirects, fake verification prompts, suspicious clipboard writes, forced downloads, executable lures, invisible click overlays, and abusive permission prompts.
 
-Version `0.3.0` moves download containment earlier in Chrome's request path. Strict and Learn profiles now intercept common download APIs at `document_start`, block risky network requests before delivery, inspect response headers for forced downloads, then pause and cancel any download that still reaches Chrome's download manager.
+Version `0.4.0` adds a compact watchlist and a new visual system built around the product idea: watching for threats while the user watches TV and movies. Site profiles now stay collapsed until opened, support search, mode filters, activity sorting, event counts, and a contained scroll area.
+
+## Interface
+
+The settings page is organized like a monitoring control room rather than a long configuration form.
+
+- Compact site rows keep large watchlists manageable.
+- Search matches display names and domains.
+- Filters isolate Strict, Learn, Normal, and paused profiles.
+- Sorting supports recent activity, name, event count, and mode.
+- Per-site controls open inline only when requested.
+- The page shows watchlist, active-profile, shielded-profile, and local-event totals.
+- Add-site and global-block tools live in collapsible side panels.
+- Recent events use their own bounded table.
+- The popup uses the same screen, signal, playback, and alert language as the settings page.
+- Reduced-motion preferences disable decorative motion.
+
+The theme uses original CSS and local HTML only. It loads no remote fonts, scripts, or artwork.
 
 ## Modes
 
@@ -63,7 +80,7 @@ No runtime package install or build step is required.
 npm run check
 ```
 
-The check command runs syntax validation, policy tests, guard tests, manifest checks, and documentation checks.
+The check command runs syntax validation, policy tests, guard tests, interface checks, manifest checks, and documentation checks.
 
 ## Repository map
 
@@ -112,7 +129,8 @@ Threatwatch/
     ├── core.test.js
     ├── docs.test.js
     ├── guards.test.js
-    └── smoke.test.js
+    ├── smoke.test.js
+    └── ui.test.js
 ```
 
 ## Documentation
@@ -126,7 +144,7 @@ Threatwatch/
 
 ## Privacy
 
-Threatwatch has no telemetry and no server component. Configuration and threat events stay in Chrome local extension storage. Persisted URLs have credentials, query strings, fragments, control characters, and non-web payloads removed.
+Threatwatch has no telemetry and no server component. Configuration, watchlist preferences, and threat events stay inside the browser. Persisted threat URLs have credentials, query strings, fragments, control characters, and non-web payloads removed.
 
 ## License
 
