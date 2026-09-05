@@ -25,7 +25,30 @@ The suite performs JavaScript syntax validation and Node tests covering:
 - ClickFix and overlay regression cases
 - local blocked-download notice wiring
 - download-manager creation and filename-determination fallback wiring
+- watchlist search, filtering, sorting, bounded scrolling, and collapsed detail controls
+- popup and settings theme consistency
+- reduced-motion support
+- remote asset prohibition
 - documentation link and repository-map integrity
+
+## Interface review checklist
+
+Load the extension options page with at least 20 profiles and enough local events to exercise every display state.
+
+- The watchlist remains compact when every profile is closed.
+- The profile list scrolls inside its panel rather than growing without a limit.
+- Search matches a profile label and its hostname.
+- Strict, Learn, Normal, and Paused filters return the right profiles.
+- Recent activity and event-count sorting use local event data.
+- Opening one profile does not open every profile.
+- Open-state preferences survive a settings refresh.
+- Enabled switches can be changed without opening the profile.
+- Allowlist controls and removal actions remain reachable from the expanded row.
+- The layout stays usable at desktop, tablet, and narrow widths.
+- Keyboard focus is visible.
+- Pressing `/` outside a form focuses profile search.
+- Reduced-motion mode stops the decorative watch sweep.
+- The popup and options page use the same terminology and status colors.
 
 ## Chrome integration checklist
 
@@ -35,10 +58,10 @@ Node tests cannot prove browser event ordering. Before release, load the extensi
 
 - Click an `<a download>` link to a harmless text file.
 - Call `.click()` on a script-created download anchor.
-- submit a form whose action ends in `.exe`.
-- call `window.open()` with `.exe`, `%2Eexe`, and `%252Eexe` targets.
-- invoke save and directory pickers.
-- attempt `FileSystemFileHandle.createWritable()` from an existing handle.
+- Submit a form whose action ends in `.exe`.
+- Call `window.open()` with `.exe`, `%2Eexe`, and `%252Eexe` targets.
+- Invoke save and directory pickers.
+- Attempt `FileSystemFileHandle.createWritable()` from an existing handle.
 
 Expected result: native actions do not run, no download shelf item completes, and a Threatwatch notice appears.
 
@@ -71,6 +94,7 @@ Expected result: the child is closed under Strict or Learn, the protected source
 - `npm run check` passes.
 - Chrome reports no manifest or service-worker errors.
 - Threatwatch health reads `healthy`.
+- A 20-profile watchlist remains quick to search and edit.
 - Internal video playback still works on the protected test sites.
 - No test download reaches completion.
 - Normal mode permits downloads and does not install Strict-only guards.
