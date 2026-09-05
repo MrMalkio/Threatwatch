@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Threatwatch",
-  "version": "0.2.0",
-  "description": "Contain redirects, popunders, fake verification traps, hostile overlays, and other abusive behavior on sites you choose to protect.",
+  "version": "0.3.0",
+  "description": "Contain redirects, popunders, fake verification traps, hostile overlays, download attempts, and other abusive behavior on sites you choose to protect.",
   "minimum_chrome_version": "145",
   "permissions": [
     "contentSettings",

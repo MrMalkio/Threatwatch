@@ -1,4 +1,6 @@
 import {
+  DANGEROUS_MIME_PATTERNS,
+  FORCED_DOWNLOAD_MIME_PATTERNS,
   LEGACY_RULE_ID_MAX,
   LEGACY_RULE_ID_MIN,
   PROTECTED_SCRIPT_PREFIX,
@@ -8,6 +10,18 @@ import {
 import { uniqueDomains } from "./domain.js";
 import { getEffectivePolicy } from "./policy.js";
 import { assertProfileIntegrity } from "./profiles.js";
+import {
+  buildRiskyContentDispositionPatterns,
+  buildRiskyDownloadRegex
+} from "./risk.js";
+
+const DOWNLOAD_RESOURCE_TYPES = Object.freeze([
+  "main_frame",
+  "sub_frame",
+  "xmlhttprequest",
+  "object",
+  "other"
+]);
 
 export function isThreatwatchRuleId(ruleId) {
   return (
@@ -16,47 +30,114 @@ export function isThreatwatchRuleId(ruleId) {
   );
 }
 
+function addProtectedContextRulePair(rules, nextRuleId, profile, priority, condition) {
+  rules.push({
+    id: nextRuleId++,
+    priority,
+    action: { type: "block" },
+    condition: {
+      ...condition,
+      initiatorDomains: [profile.domain]
+    }
+  });
+
+  rules.push({
+    id: nextRuleId++,
+    priority: priority - 1,
+    action: { type: "block" },
+    condition: {
+      ...condition,
+      topDomains: [profile.domain]
+    }
+  });
+
+  return nextRuleId;
+}
+
+function downloadResponseHeaders() {
+  return [
+    {
+      header: "content-disposition",
+      values: buildRiskyContentDispositionPatterns()
+    },
+    {
+      header: "content-type",
+      values: [
+        ...DANGEROUS_MIME_PATTERNS,
+        ...FORCED_DOWNLOAD_MIME_PATTERNS
+      ]
+    }
+  ];
+}
+
 export function buildDynamicRules(config) {
   assertProfileIntegrity(config);
   const rules = [];
   let nextRuleId = RULE_ID_MIN;
 
   for (const profile of config.profiles) {
+    if (!profile.enabled) continue;
     const policy = getEffectivePolicy(profile);
-    if (!profile.enabled || !policy.blockExternalNavigation) continue;
 
-    const excludedRequestDomains = uniqueDomains([
-      profile.domain,
-      ...(profile.allowedTopLevelDomains || [])
-    ]);
+    if (policy.blockExternalNavigation) {
+      const excludedRequestDomains = uniqueDomains([
+        profile.domain,
+        ...(profile.allowedTopLevelDomains || [])
+      ]);
 
-    rules.push({
-      id: nextRuleId++,
-      priority: 10,
-      action: { type: "block" },
-      condition: {
-        initiatorDomains: [profile.domain],
-        excludedRequestDomains,
-        resourceTypes: ["main_frame"]
-      }
-    });
+      rules.push({
+        id: nextRuleId++,
+        priority: 20,
+        action: { type: "block" },
+        condition: {
+          initiatorDomains: [profile.domain],
+          excludedRequestDomains,
+          resourceTypes: ["main_frame"]
+        }
+      });
 
-    rules.push({
-      id: nextRuleId++,
-      priority: 9,
-      action: { type: "block" },
-      condition: {
-        topDomains: [profile.domain],
-        excludedRequestDomains,
-        resourceTypes: ["main_frame"]
-      }
-    });
+      rules.push({
+        id: nextRuleId++,
+        priority: 19,
+        action: { type: "block" },
+        condition: {
+          topDomains: [profile.domain],
+          excludedRequestDomains,
+          resourceTypes: ["main_frame"]
+        }
+      });
+    }
+
+    if (policy.blockDownloads) {
+      nextRuleId = addProtectedContextRulePair(
+        rules,
+        nextRuleId,
+        profile,
+        40,
+        {
+          regexFilter: buildRiskyDownloadRegex(),
+          isUrlFilterCaseSensitive: false,
+          resourceTypes: DOWNLOAD_RESOURCE_TYPES
+        }
+      );
+
+      nextRuleId = addProtectedContextRulePair(
+        rules,
+        nextRuleId,
+        profile,
+        38,
+        {
+          responseHeaders: downloadResponseHeaders(),
+          resourceTypes: DOWNLOAD_RESOURCE_TYPES
+        }
+      );
+    }
   }
 
   for (const domain of config.blockedDomains) {
     rules.push({
       id: nextRuleId++,
-      priority: 20,
+      priority: 50,
       action: { type: "block" },
       condition: {
         requestDomains: [domain],
@@ -80,31 +161,54 @@ export function buildDynamicRules(config) {
   return rules;
 }
 
+function protectedMatches(domain) {
+  return [
+    `http://${domain}/*`,
+    `https://${domain}/*`,
+    `http://*.${domain}/*`,
+    `https://*.${domain}/*`
+  ];
+}
+
 export function buildRegisteredScripts(config) {
   assertProfileIntegrity(config);
   const scripts = [];
 
   for (const profile of config.profiles) {
+    if (!profile.enabled) continue;
+
     const policy = getEffectivePolicy(profile);
-    if (!profile.enabled || !policy.blockProtocols) continue;
+    const matches = protectedMatches(profile.domain);
 
-    const matches = [
-      `http://${profile.domain}/*`,
-      `https://${profile.domain}/*`,
-      `http://*.${profile.domain}/*`,
-      `https://*.${profile.domain}/*`
-    ];
+    if (policy.blockProtocols || policy.blockDownloads) {
+      const javascriptFiles = [];
+      const suffixes = [];
 
-    scripts.push({
-      id: `${PROTECTED_SCRIPT_PREFIX}${profile.id}-page`,
-      matches,
-      js: ["src/page-guard.js"],
-      runAt: "document_start",
-      allFrames: true,
-      matchOriginAsFallback: true,
-      world: "MAIN",
-      persistAcrossSessions: true
-    });
+      if (policy.blockDownloads) {
+        javascriptFiles.push("src/shared/download-policy-data.js");
+        suffixes.push("download");
+      }
+
+      if (policy.blockProtocols) {
+        javascriptFiles.push("src/page-guard.js");
+        suffixes.push("protocol");
+      }
+
+      if (policy.blockDownloads) {
+        javascriptFiles.push("src/download-guard.js");
+      }
+
+      scripts.push({
+        id: `${PROTECTED_SCRIPT_PREFIX}${profile.id}-main-${suffixes.join("-")}`,
+        matches,
+        js: javascriptFiles,
+        runAt: "document_start",
+        allFrames: true,
+        matchOriginAsFallback: true,
+        world: "MAIN",
+        persistAcrossSessions: true
+      });
+    }
 
     if (policy.blockClipboard) {
       scripts.push({

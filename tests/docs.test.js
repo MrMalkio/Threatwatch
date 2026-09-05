@@ -41,7 +41,9 @@ test("README repository map lists real files", () => {
     "src/core/profiles.js",
     "src/core/risk.js",
     "src/core/rules.js",
-    "src/core/sanitizer.js"
+    "src/core/sanitizer.js",
+    "src/download-guard.js",
+    "src/shared/download-policy-data.js"
   ];
 
   for (const file of required) {

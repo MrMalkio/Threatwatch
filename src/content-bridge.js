@@ -3,7 +3,8 @@
   const PAGE_EVENT_TYPES = new Set([
     "popup-blocked",
     "protocol-blocked",
-    "clipboard-blocked"
+    "clipboard-blocked",
+    "dangerous-download"
   ]);
   const CLICKFIX_PATTERNS = [
     /press\s+(?:the\s+)?windows(?:\s+key)?\s*\+\s*r/i,
@@ -18,6 +19,8 @@
   let riskyExtensions = [];
   let clickFixWarningShown = false;
   let scanScheduled = false;
+  let downloadNoticeHost = null;
+  let downloadNoticeTimer = null;
 
   chrome.runtime.sendMessage({ type: "bridge-init" })
     .then((response) => {
@@ -34,11 +37,21 @@
     const message = event.data;
     if (!message || message.channel !== CHANNEL || !PAGE_EVENT_TYPES.has(message.type)) return;
 
+    if (message.type === "dangerous-download") {
+      showDownloadBlockedNotice();
+    }
+
     report({
       type: message.type,
       action: "blocked",
       targetUrl: message.payload?.targetUrl || ""
     });
+  });
+
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message?.type === "download-blocked-notice") {
+      showDownloadBlockedNotice();
+    }
   });
 
   function activate() {
@@ -65,6 +78,16 @@
     }
 
     const isWebProtocol = targetUrl.protocol === "http:" || targetUrl.protocol === "https:";
+    const declaresDownload = anchor.hasAttribute?.("download") === true;
+
+    if (policy.blockDownloads && declaresDownload) {
+      stopEvent(event);
+      const eventType = "dangerous-download";
+      showDownloadBlockedNotice();
+      report({ type: eventType, action: "blocked", targetUrl: targetUrl.href });
+      return;
+    }
+
     if (!isWebProtocol) {
       if (!policy.blockProtocols) return;
       stopEvent(event);
@@ -74,6 +97,7 @@
 
     if (policy.blockDownloads && hasRiskyExtension(targetUrl.pathname)) {
       stopEvent(event);
+      showDownloadBlockedNotice();
       report({ type: "dangerous-download", action: "blocked", targetUrl: targetUrl.href });
       return;
     }
@@ -121,7 +145,16 @@
   }
 
   function hasRiskyExtension(pathname) {
-    const candidate = String(pathname || "").toLowerCase();
+    let candidate = String(pathname || "").toLowerCase();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const decoded = decodeURIComponent(candidate);
+        if (decoded === candidate) break;
+        candidate = decoded;
+      } catch {
+        break;
+      }
+    }
     return riskyExtensions.some((extension) => candidate.endsWith(extension));
   }
 
@@ -203,6 +236,32 @@
       element.style.setProperty("pointer-events", "none", "important");
       report({ type: "click-overlay", action: "neutralized" });
     }
+  }
+
+  function showDownloadBlockedNotice() {
+    if (window !== window.top) return;
+
+    if (downloadNoticeHost?.isConnected) {
+      clearTimeout(downloadNoticeTimer);
+      downloadNoticeTimer = setTimeout(removeDownloadNotice, 4_500);
+      return;
+    }
+
+    const host = document.createElement("div");
+    host.dataset.threatwatchUi = "true";
+    host.style.cssText = "all:initial;position:fixed;right:16px;top:16px;z-index:2147483647";
+    const shadowRoot = host.attachShadow({ mode: "closed" });
+    shadowRoot.innerHTML = '<div style="max-width:390px;box-sizing:border-box;border:1px solid #f79009;border-radius:12px;background:#101828;color:#fff;padding:13px 15px;font:600 14px/1.45 system-ui,sans-serif;box-shadow:0 12px 32px rgba(0,0,0,.35)"><b style="color:#fec84b">Threatwatch blocked a download.</b><div style="margin-top:3px;color:#d0d5dd;font-weight:500">The request was blocked or cancelled before Chrome could finish the download.</div></div>';
+
+    downloadNoticeHost = host;
+    (document.documentElement || document.body).appendChild(host);
+    downloadNoticeTimer = setTimeout(removeDownloadNotice, 4_500);
+  }
+
+  function removeDownloadNotice() {
+    downloadNoticeHost?.remove();
+    downloadNoticeHost = null;
+    downloadNoticeTimer = null;
   }
 
   function showClickFixWarning() {

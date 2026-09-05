@@ -1,45 +1,76 @@
 # Testing
 
+## Automated checks
+
 Run:
 
 ```bash
 npm run check
 ```
 
-The command first parses every JavaScript file with Node, then runs the Node test suite.
+The suite performs JavaScript syntax validation and Node tests covering:
 
-## Unit coverage
+- Normal, Strict, and Learn mode separation
+- URL and domain sanitization
+- profile deduplication and registered-script identity
+- early MAIN-world download-guard registration
+- risky filename and encoded-extension recognition
+- DNR risky-URL rules
+- DNR attachment-filename and MIME response rules
+- browser danger and MIME classification
+- blank popup, protocol, and risky `window.open()` interception
+- download anchors and programmatic anchor clicks
+- risky form submissions
+- save picker and file-handle write interception
+- ClickFix and overlay regression cases
+- local blocked-download notice wiring
+- download-manager creation and filename-determination fallback wiring
+- documentation link and repository-map integrity
 
-The suite checks:
+## Chrome integration checklist
 
-- Normal, Strict, and Learn mode policy
-- domain normalization and matching
-- duplicate-domain migration
-- profile ID uniqueness
-- DNR rule generation
-- registered-script ID uniqueness
-- event URL sanitization
-- risky extension matching
-- manifest references
-- documentation links
-- popup blank-target variants in a VM harness
-- source regressions for overlay scan continuation
-- removal of the old whole-state `save-state` command
+Node tests cannot prove browser event ordering. Before release, load the extension unpacked into Chrome 145 or newer and test a local fixture plus a disposable browser profile.
 
-## Browser checks before release
+### Early page guard
 
-Load the unpacked extension in Chrome 145 or newer and use a controlled fixture page to test:
+- Click an `<a download>` link to a harmless text file.
+- Call `.click()` on a script-created download anchor.
+- submit a form whose action ends in `.exe`.
+- call `window.open()` with `.exe`, `%2Eexe`, and `%252Eexe` targets.
+- invoke save and directory pickers.
+- attempt `FileSystemFileHandle.createWritable()` from an existing handle.
 
-- internal link
-- external link
-- script-assigned top navigation
-- new tab and popunder
-- `about:blank#fragment`
-- `mailto:` and `tel:`
-- executable link
-- clipboard command payload
-- ClickFix text followed by a newly inserted overlay
-- two overlays where the first is already neutralized
-- forced registered-script failure with old guards already present
+Expected result: native actions do not run, no download shelf item completes, and a Threatwatch notice appears.
 
-The Node suite cannot prove Chrome DNR and `webNavigation` ordering under every redirect chain. A Chrome fixture run remains a release gate.
+### Network layer
+
+Use a local server with endpoints that return:
+
+- `Content-Disposition: attachment`
+- `Content-Disposition: inline; filename="payload.exe"`
+- `Content-Type: application/x-msdownload`
+- a risky URL with no disposition header
+- a redirect from a harmless URL to a risky URL
+
+Expected result: the request is blocked before a completed download is created.
+
+### Download-manager fallback
+
+Use a harmless endpoint with an opaque URL and a response that Chrome treats as a download but that does not match the early rules.
+
+Expected result: Threatwatch pauses and cancels the item, removes a completed file if the download wins the race, records one deduplicated event, and leaves protection health at `healthy`.
+
+### Source ancestry
+
+Open a new tab from a protected fixture and start a download from the child immediately.
+
+Expected result: the child is closed under Strict or Learn, the protected source context remains available long enough to cancel the download, and the event identifies the protected profile.
+
+## Release gate
+
+- `npm run check` passes.
+- Chrome reports no manifest or service-worker errors.
+- Threatwatch health reads `healthy`.
+- Internal video playback still works on the protected test sites.
+- No test download reaches completion.
+- Normal mode permits downloads and does not install Strict-only guards.
