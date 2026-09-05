@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Getting started · Threatwatch</title><link rel="stylesheet" href="../assets/site.css"></head>
+<body data-root="../" data-page="help"><header data-site-header></header><main id="main">
+<section class="page-hero"><div class="container"><div class="breadcrumbs"><a href="../index.html">Threatwatch</a> / <a href="index.html">Help</a> / Getting started</div><span class="kicker">Guide</span><h1>Getting started with Threatwatch</h1><p class="lead">Threatwatch 0.4.0 is currently a developer build. You load it directly from the repository rather than installing it from the Chrome Web Store.</p></div></section>
+<section class="section compact"><div class="container docs-layout">
+  <nav class="docs-nav" aria-label="Help guides"><a class="current" href="getting-started.html">Getting started</a><a href="modes.html">Watch modes</a><a href="downloads.html">Downloads</a><a href="false-positives.html">False positives</a><a href="../faq/index.html">FAQ</a></nav>
+  <article class="prose">
+    <h2>Requirements</h2><ul><li>Chrome 145 or newer.</li><li>A local copy of the Threatwatch repository.</li><li>Developer mode enabled at <code>chrome://extensions</code>.</li></ul>
+    <h2>Install the extension</h2><ol><li>Download or clone the <a href="https://github.com/MrMalkio/Threatwatch" target="_blank" rel="noreferrer">Threatwatch repository</a>.</li><li>Open <code>chrome://extensions</code>.</li><li>Turn on <strong>Developer mode</strong>.</li><li>Select <strong>Load unpacked</strong>.</li><li>Choose the repository root, the folder containing <code>manifest.json</code>.</li><li>Pin Threatwatch from Chrome's extensions menu.</li></ol>
+    <div class="note">After pulling a new version, return to <code>chrome://extensions</code> and select <strong>Reload</strong> on the Threatwatch card.</div>
+    <h2>Add a site to your watchlist</h2><ol><li>Visit the site you want to monitor.</li><li>Select the Threatwatch toolbar icon.</li><li>Choose a watch mode. <strong>Strict</strong> is the safest default for a site you do not trust.</li><li>Select <strong>Watch this site</strong>.</li></ol>
+    <p>You can manage many profiles from <strong>Open watchlist</strong>. The settings page supports search, mode filters, activity sorting, and compact rows.</p>
+    <h2>Confirm protection health</h2><p>Open the watchlist and check <strong>Protection status</strong>. A healthy status means Threatwatch successfully reconciled the active page guards, dynamic network rules, and browser content settings it manages.</p>
+    <div class="warning note"><strong>Healthy does not mean the website is safe.</strong> It means Threatwatch's configured protection layers loaded successfully.</div>
+    <h2>Start with Learn when you are diagnosing a new site</h2><p>Learn mode blocks with the same core containment behavior as Strict and marks unexpected navigation decisions for later review. Use it when you want to see what a site keeps trying to reach before making any allowlist decision.</p>
+    <h2>What to do after a catch</h2><p>Open the toolbar popup or watchlist. Look at the event type, action, target, and protection layer. Do not approve a destination just because the player stops working. A blocked destination can be advertising, tracking, a player dependency, or something hostile.</p>
+    <p><a class="button" href="false-positives.html">Review false positives safely</a></p>
+  </article>
+</div></section></main><footer data-site-footer></footer><script src="../assets/site.js"></script></body></html>
