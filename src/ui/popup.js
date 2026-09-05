@@ -6,6 +6,9 @@ const elements = {
   protected: document.querySelector("#protected"),
   newMode: document.querySelector("#new-mode"),
   protect: document.querySelector("#protect"),
+  unprotectedAvatar: document.querySelector("#unprotected-avatar"),
+  protectedAvatar: document.querySelector("#protected-avatar"),
+  profileState: document.querySelector("#profile-state"),
   profileLabel: document.querySelector("#profile-label"),
   enabled: document.querySelector("#enabled"),
   mode: document.querySelector("#mode"),
@@ -26,10 +29,25 @@ async function send(type, payload = {}) {
 
 function setMessage(message = "") {
   elements.message.textContent = message;
+  elements.message.className = "message error";
+}
+
+function initials(value = "") {
+  const cleaned = String(value)
+    .replace(/^www\./i, "")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim();
+  const pieces = cleaned.split(/\s+/).filter(Boolean);
+
+  if (pieces.length > 1) {
+    return `${pieces[0][0] || ""}${pieces[1][0] || ""}`.toUpperCase();
+  }
+  return cleaned.slice(0, 2).toUpperCase() || "TW";
 }
 
 async function load() {
   try {
+    setMessage("");
     [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!activeTab?.url || !/^https?:/i.test(activeTab.url)) {
       throw new Error("Threatwatch can protect HTTP and HTTPS pages.");
@@ -37,6 +55,7 @@ async function load() {
 
     const parsed = new URL(activeTab.url);
     elements.domain.textContent = parsed.hostname;
+    elements.unprotectedAvatar.textContent = initials(parsed.hostname);
     status = await send("url.status", { url: activeTab.url });
     render();
   } catch (error) {
@@ -55,29 +74,44 @@ function render() {
   elements.protected.classList.toggle("hidden", !profile);
 
   if (profile) {
-    elements.profileLabel.textContent = profile.label || profile.domain;
+    const label = profile.label || profile.domain;
+    elements.profileLabel.textContent = label;
+    elements.protectedAvatar.textContent = initials(label);
     elements.enabled.checked = profile.enabled;
     elements.mode.value = profile.mode;
     elements.eventCount.textContent = String(status.eventCount || 0);
+    elements.profileState.textContent = profile.enabled ? "Under watch" : "Watch paused";
+    elements.profileState.className = `popup-state-label${profile.enabled ? "" : " off-watch"}`;
   }
 
   elements.events.replaceChildren();
   if (!status.recentEvents?.length) {
     const empty = document.createElement("div");
-    empty.className = "muted small";
-    empty.textContent = "No recent events.";
+    empty.className = "empty-state";
+    const screen = document.createElement("span");
+    screen.className = "empty-screen";
+    screen.setAttribute("aria-hidden", "true");
+    const title = document.createElement("strong");
+    title.textContent = "No catches on this channel";
+    const note = document.createElement("span");
+    note.textContent = "Threatwatch will show recent interventions here.";
+    empty.append(screen, title, note);
     elements.events.appendChild(empty);
     return;
   }
 
-  for (const event of status.recentEvents) {
+  for (const threatEvent of status.recentEvents) {
     const item = document.createElement("div");
     item.className = "event";
+
     const title = document.createElement("strong");
-    title.textContent = `${event.action}: ${event.type}`;
+    title.textContent = `${threatEvent.action}: ${threatEvent.type}`;
+
     const target = document.createElement("div");
     target.className = "muted small";
-    target.textContent = event.targetUrl || new Date(event.timestamp).toLocaleString();
+    target.textContent = threatEvent.targetUrl ||
+      new Date(threatEvent.timestamp).toLocaleString();
+
     item.append(title, target);
     elements.events.appendChild(item);
   }
@@ -88,7 +122,11 @@ elements.protect.addEventListener("click", async () => {
     setMessage("");
     const hostname = new URL(activeTab.url).hostname;
     await send("profile.create", {
-      profile: { domain: hostname, label: hostname, mode: elements.newMode.value }
+      profile: {
+        domain: hostname,
+        label: hostname,
+        mode: elements.newMode.value
+      }
     });
     await load();
   } catch (error) {
@@ -121,6 +159,7 @@ elements.mode.addEventListener("change", async () => {
 });
 
 elements.options.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
 elements.retry.addEventListener("click", async () => {
   try {
     await send("protection.retry");
