@@ -4,70 +4,64 @@
 
 Threatwatch seeks to protect:
 
-- the user's active browsing context
-- the user's attention and click intent
+- the user's click intent
+- the current browsing context
 - browser permission settings
 - the clipboard from command-payload injection
-- the device from risky download lures
+- the device from forced or disguised downloads
 - local Threatwatch configuration
-- the local event record
+- the local threat-event record
 
-## Expected hostile behavior
+## Expected hostile download behavior
 
 Threatwatch assumes a protected page may:
 
-- intercept early clicks with full-page elements
-- call `window.open()` with blank or external targets
-- create popunders or new tabs
-- navigate the top frame to rotating advertising domains
-- launch custom protocols or external applications
-- display fake verification instructions
-- write shell commands to the clipboard
-- offer executable or script downloads
-- use third-party frames or scripts
-- forge page-world messages sent to the isolated content script
-- mutate the DOM repeatedly to replace removed or disabled nodes
+- add or remove a download attribute immediately before a click
+- call a cached or native anchor click method
+- submit a form to a forced-download response
+- hide executable extensions behind URL encoding or query strings
+- return a dangerous MIME type from a harmless-looking URL
+- use `Content-Disposition` to force an attachment
+- open a short-lived tab and begin a download before the tab closes
+- omit a referrer or use `noopener`
+- create a blob URL and invoke a save API
+- request a file or directory handle and write to it
+- trigger several downloads in a short burst
+- rely on a service worker or cache path that does not reach DNR
+- race Chrome's download manager and endpoint security
 
 ## Trust boundaries
 
-The hostile page and all page-world JavaScript are untrusted.
+The hostile page, its frames, and all page-world JavaScript are untrusted.
 
-The isolated content script is trusted for observations but has no configuration mutation rights.
+The isolated content bridge is trusted for observations but has no configuration mutation rights.
 
-The service worker owns:
+The service worker owns profile identity, mode policy, event validation, URL sanitization, DNR rules, browser content settings, registered scripts, and persisted configuration.
 
-- profile identity
-- domain normalization
-- mode policy
-- event action and severity
-- URL sanitization
-- DNR rules
-- browser content settings
-- registered MAIN-world scripts
-- persisted configuration
-
-Page-world reports cannot add allowlist entries, change modes, replace profiles, or choose stored severity and detail text.
+Page-world reports cannot change modes, profiles, allowlists, event severity, or stored detail text.
 
 ## Fail-closed behavior
 
-Registered guard updates add and verify desired scripts before stale scripts are removed. A rejected registration batch leaves existing guards intact.
+Registered-guard updates add and verify desired scripts before stale scripts are removed.
 
-Configuration is not persisted until the replacement protection set is ready. Errors mark runtime health degraded and retain the prior stored configuration.
+Configuration is not persisted until the replacement protection set is ready.
 
-A cleanup error may leave extra guards registered. Extra protection is preferred to silent loss of protection.
+Download blocking remains active when local reporting or residual-file cleanup fails.
+
+When a late download item appears from a protected Strict or Learn context, the extension blocks it regardless of its apparent file type. Filename and MIME classifiers exist to stop common attempts earlier, not to permit an unclassified download.
 
 ## Known gaps
 
 Threatwatch cannot promise containment against:
 
 - Chrome security defects
+- endpoint malware or security products acting outside Chrome
 - malicious extensions with stronger permissions
-- endpoint malware
-- downloads opened outside Chrome
-- user-approved exceptions
+- files created outside the monitored Chrome profile
+- unsafe user-approved exceptions
 - attacks in another browser or profile
 - network or DNS manipulation
 - social engineering that convinces the user to disable protection
-- behaviors that never touch the monitored browser APIs
+- page behavior that never touches a monitored browser API
 
-MAIN-world messages may be forged by a protected page. The service worker treats them as observations only and rechecks the active profile and mode before accepting them.
+Declarative Net Request applies only to requests that reach Chrome's network stack. Responses generated entirely by a page service worker or CacheStorage require the later page and download-manager controls.

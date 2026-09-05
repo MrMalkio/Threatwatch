@@ -1,3 +1,7 @@
+import "../shared/download-policy-data.js";
+
+const downloadPolicy = globalThis.__THREATWATCH_DOWNLOAD_POLICY__;
+
 export const STORAGE_KEYS = Object.freeze({
   config: "threatwatch.config.v2",
   events: "threatwatch.events.v1",
@@ -20,24 +24,9 @@ export const LEGACY_RULE_ID_MAX = 4_999;
 
 export const MODES = Object.freeze(["normal", "strict", "learn"]);
 
-export const RISKY_EXTENSIONS = Object.freeze([
-  ".exe",
-  ".msi",
-  ".msix",
-  ".bat",
-  ".cmd",
-  ".ps1",
-  ".vbs",
-  ".js",
-  ".scr",
-  ".hta",
-  ".reg",
-  ".lnk",
-  ".jar",
-  ".apk",
-  ".dmg",
-  ".pkg"
-]);
+export const RISKY_EXTENSIONS = downloadPolicy.riskyExtensions;
+export const DANGEROUS_MIME_PATTERNS = downloadPolicy.dangerousMimePatterns;
+export const FORCED_DOWNLOAD_MIME_PATTERNS = downloadPolicy.forcedDownloadMimePatterns;
 
 export const CONTENT_EVENT_TYPES = Object.freeze(new Set([
   "popup-blocked",
@@ -71,8 +60,8 @@ export const EVENT_DEFINITIONS = Object.freeze({
   "dangerous-download": Object.freeze({
     severity: "high",
     defaultAction: "blocked",
-    actions: Object.freeze(["blocked", "cancelled"]),
-    detail: "Blocked or cancelled a high-risk executable or script download."
+    actions: Object.freeze(["blocked", "paused", "cancelled", "removed"]),
+    detail: "Blocked or cancelled a download carrying a risky filename, URL, MIME type, or browser danger signal."
   }),
   "external-navigation": Object.freeze({
     severity: "medium",

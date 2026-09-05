@@ -4,6 +4,7 @@
 
   const CHANNEL = "__THREATWATCH_PAGE_GUARD__";
   const nativeOpen = window.open;
+  const downloadPolicy = globalThis.__THREATWATCH_DOWNLOAD_POLICY__ || null;
 
   function report(type, payload = {}) {
     try {
@@ -16,8 +17,28 @@
         }
       }, "*");
     } catch {
-      // Reporting must never restore the blocked behavior.
+      // Reporting must never restore blocked behavior.
     }
+  }
+
+  function decodeCandidate(value) {
+    let candidate = String(value || "").split(/[?#]/, 1)[0].replace(/\\/g, "/").toLowerCase();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const decoded = decodeURIComponent(candidate);
+        if (decoded === candidate) break;
+        candidate = decoded;
+      } catch {
+        break;
+      }
+    }
+    return candidate;
+  }
+
+  function isRiskyDownloadTarget(value) {
+    const extensions = downloadPolicy?.riskyExtensions || [];
+    const candidate = decodeCandidate(value);
+    return extensions.some((extension) => candidate.endsWith(extension));
   }
 
   function classifyTarget(value) {
@@ -37,6 +58,10 @@
         return { kind: "protocol", raw: target.href };
       }
 
+      if (isRiskyDownloadTarget(target.href)) {
+        return { kind: "download", raw: target.href };
+      }
+
       return { kind: "web", raw: target.href };
     } catch {
       return { kind: "invalid", raw };
@@ -53,6 +78,11 @@
 
     if (target.kind === "protocol") {
       report("protocol-blocked", { targetUrl: target.raw });
+      return null;
+    }
+
+    if (target.kind === "download") {
+      report("dangerous-download", { targetUrl: target.raw });
       return null;
     }
 

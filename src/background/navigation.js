@@ -6,35 +6,48 @@ import {
 } from "../core/domain.js";
 import { getEffectivePolicy } from "../core/policy.js";
 import { getProfileById } from "../core/profiles.js";
+import { hasRiskyExtension } from "../core/risk.js";
 
 let handlersRegistered = false;
+const tabContextCache = new Map();
 
 function contextKey(tabId) {
   return `${SESSION_KEY_PREFIX}${tabId}`;
 }
 
+export function peekTabContext(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return null;
+  return tabContextCache.get(tabId) || null;
+}
+
 export async function readTabContext(tabId) {
   if (!Number.isInteger(tabId) || tabId < 0) return null;
+  const cached = peekTabContext(tabId);
+  if (cached) return cached;
+
   const key = contextKey(tabId);
   const stored = await chrome.storage.session.get(key);
-  return stored[key] || null;
+  const context = stored[key] || null;
+  if (context) tabContextCache.set(tabId, context);
+  return context;
 }
 
 export async function rememberTabContext(tabId, url, config) {
   if (!Number.isInteger(tabId) || tabId < 0) return;
   const profile = findProfileForUrl(config, url);
   const key = contextKey(tabId);
-  await chrome.storage.session.set({
-    [key]: {
-      url: String(url || ""),
-      profileId: profile?.id || "",
-      committedAt: Date.now()
-    }
-  });
+  const context = {
+    url: String(url || ""),
+    profileId: profile?.id || "",
+    committedAt: Date.now()
+  };
+  tabContextCache.set(tabId, context);
+  await chrome.storage.session.set({ [key]: context });
 }
 
 async function forgetTabContext(tabId) {
   if (!Number.isInteger(tabId) || tabId < 0) return;
+  tabContextCache.delete(tabId);
   await chrome.storage.session.remove(contextKey(tabId));
 }
 
@@ -42,6 +55,14 @@ function previousProfile(config, context) {
   if (!context) return null;
   const profile = getProfileById(config, context.profileId) || findProfileForUrl(config, context.url);
   return profile?.enabled ? profile : null;
+}
+
+function notifyDownloadBlocked(tabId) {
+  if (!Number.isInteger(tabId) || tabId < 0) return;
+  chrome.tabs.sendMessage(tabId, {
+    type: "download-blocked-notice",
+    eventType: "dangerous-download"
+  }).catch(() => undefined);
 }
 
 export function registerNavigationHandlers({ readConfig, appendEvent }) {
@@ -57,10 +78,24 @@ export function registerNavigationHandlers({ readConfig, appendEvent }) {
         readTabContext(details.tabId)
       ]);
       const profile = previousProfile(config, context);
-      if (!profile || isAllowedTopLevelUrl(details.url, profile)) return;
+      if (!profile) return;
 
       const policy = getEffectivePolicy(profile);
-      if (!policy.logExternalNavigation) return;
+      if (policy.blockDownloads && hasRiskyExtension(details.url)) {
+        notifyDownloadBlocked(details.tabId);
+        await appendEvent({
+          type: "dangerous-download",
+          action: "blocked",
+          profileId: profile.id,
+          sourceUrl: context?.url || "",
+          targetUrl: details.url,
+          sourceLayer: "navigation",
+          decisionCandidate: policy.recordDecisionCandidate
+        });
+        return;
+      }
+
+      if (isAllowedTopLevelUrl(details.url, profile) || !policy.logExternalNavigation) return;
 
       await appendEvent({
         type: "external-navigation",
@@ -115,6 +150,8 @@ export function registerNavigationHandlers({ readConfig, appendEvent }) {
 
       const policy = getEffectivePolicy(profile);
       if (!policy.logExternalNavigation) return;
+
+      await rememberTabContext(details.tabId, sourceTab.url || "", config);
 
       let action = "observed";
       if (policy.blockExternalNavigation) {

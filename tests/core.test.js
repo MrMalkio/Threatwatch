@@ -8,7 +8,15 @@ import {
   createProfile,
   normalizeConfig
 } from "../src/core/profiles.js";
-import { hasRiskyExtension } from "../src/core/risk.js";
+import {
+  buildRiskyContentDispositionPatterns,
+  buildRiskyDownloadRegex,
+  browserMarkedDownloadDangerous,
+  classifyDownloadCandidate,
+  hasRiskyExtension,
+  isDangerousMime,
+  isForcedDownloadMime
+} from "../src/core/risk.js";
 import { buildDynamicRules, buildRegisteredScripts } from "../src/core/rules.js";
 import { sanitizeEventUrl } from "../src/core/sanitizer.js";
 
@@ -92,15 +100,22 @@ test("disabled profiles remain manageable without becoming active", () => {
   );
 });
 
-test("registered script IDs remain unique after normalization", () => {
+test("registered script IDs remain unique and install the early download guard", () => {
   const config = createDefaultConfig();
   const scripts = buildRegisteredScripts(config);
   const ids = scripts.map((script) => script.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.ok(ids.every((id) => id.startsWith("tw-p-")));
+
+  const downloadScripts = scripts.filter((script) => script.js.includes("src/download-guard.js"));
+  assert.equal(downloadScripts.length, config.profiles.length);
+  assert.ok(downloadScripts.every((script) => (
+    script.js[0] === "src/shared/download-policy-data.js" &&
+    script.js.includes("src/page-guard.js")
+  )));
 });
 
-test("Normal profiles do not receive external-navigation DNR rules", () => {
+test("Normal profiles receive neither external-navigation nor download DNR rules", () => {
   const config = normalizeConfig({
     profiles: [
       createProfile("normal.example", { mode: "normal" }),
@@ -109,11 +124,65 @@ test("Normal profiles do not receive external-navigation DNR rules", () => {
     blockedDomains: []
   });
   const rules = buildDynamicRules(config);
-  assert.equal(rules.length, 2);
-  assert.deepEqual(rules[0].condition.initiatorDomains, ["strict.example"]);
+
+  assert.equal(rules.length, 6);
+  assert.ok(rules.every((rule) => (
+    rule.condition.initiatorDomains?.[0] === "strict.example" ||
+    rule.condition.topDomains?.[0] === "strict.example"
+  )));
 });
 
-test("risky extension matching ignores URL suffixes", () => {
+test("risky extension matching handles query strings and encoded suffixes", () => {
   assert.equal(hasRiskyExtension("https://example.com/update.exe?token=x#y"), true);
+  assert.equal(hasRiskyExtension("https://example.com/update%2EEXE?token=x"), true);
+  assert.equal(hasRiskyExtension("C:\\Downloads\\payload.PS1"), true);
   assert.equal(hasRiskyExtension("https://example.com/video.mp4"), false);
+});
+
+test("pre-request download regex catches executable, script, archive, and encoded paths", () => {
+  const regex = new RegExp(buildRiskyDownloadRegex(), "i");
+  assert.equal(regex.test("https://bad.example/file.exe"), true);
+  assert.equal(regex.test("https://bad.example/file%2Eps1?x=1"), true);
+  assert.equal(regex.test("https://bad.example/file%252Eps1?x=1"), true);
+  assert.equal(regex.test("https://bad.example/archive.zip#x"), true);
+  assert.equal(regex.test("https://bad.example/video.mp4"), false);
+});
+
+test("response-header rules cover attachment filenames and dangerous MIME types", () => {
+  const config = normalizeConfig({
+    profiles: [createProfile("strict.example", { mode: "strict" })]
+  });
+  const rules = buildDynamicRules(config);
+  const responseRules = rules.filter((rule) => Array.isArray(rule.condition.responseHeaders));
+
+  assert.equal(responseRules.length, 2);
+  const headers = responseRules[0].condition.responseHeaders;
+  const disposition = headers.find((header) => header.header === "content-disposition");
+  const contentType = headers.find((header) => header.header === "content-type");
+
+  assert.ok(disposition.values.includes("*attachment*"));
+  assert.ok(disposition.values.includes("*filename*.exe*"));
+  assert.ok(contentType.values.includes("application/x-msdownload*"));
+  assert.ok(contentType.values.includes("application/force-download*"));
+});
+
+test("download candidate classification treats browser, MIME, and filename signals as risky", () => {
+  assert.equal(classifyDownloadCandidate({ filename: "payload.exe" }).risky, true);
+  assert.equal(classifyDownloadCandidate({ mime: "application/x-msdownload" }).risky, true);
+  assert.equal(classifyDownloadCandidate({ mime: "application/force-download" }).risky, true);
+  assert.equal(classifyDownloadCandidate({ danger: "uncommon" }).risky, true);
+  assert.equal(classifyDownloadCandidate({ filename: "movie.mp4", mime: "video/mp4", danger: "safe" }).risky, false);
+
+  assert.equal(isDangerousMime("application/x-msdownload; charset=binary"), true);
+  assert.equal(isForcedDownloadMime("application/x-download"), true);
+  assert.equal(browserMarkedDownloadDangerous("safe"), false);
+  assert.equal(browserMarkedDownloadDangerous("content"), true);
+});
+
+test("content-disposition patterns include every risky extension", async () => {
+  const { RISKY_EXTENSIONS } = await import("../src/core/constants.js");
+  const patterns = buildRiskyContentDispositionPatterns();
+  for (const extension of RISKY_EXTENSIONS) {
+    assert.ok(patterns.includes(`*filename*${extension}*`), `missing ${extension}`);
+  }
 });
