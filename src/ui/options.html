@@ -3,82 +3,196 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Threatwatch settings</title>
+  <meta name="color-scheme" content="dark">
+  <title>Threatwatch control room</title>
   <link rel="stylesheet" href="theme.css">
 </head>
-<body>
-  <main>
-    <div class="row between">
-      <div>
-        <h1>Threatwatch</h1>
-        <p class="muted">Site profiles, navigation containment, and local threat events.</p>
-      </div>
-      <div class="row">
-        <span id="health" class="status">Loading</span>
-        <button id="retry" class="ghost">Retry protection sync</button>
-      </div>
-    </div>
+<body class="options-page">
+  <div class="screen-noise" aria-hidden="true"></div>
 
-    <p id="message" class="error" role="status"></p>
-
-    <section class="section grid two">
-      <form id="add-profile" class="card stack">
-        <div>
-          <h2>Add protected site</h2>
-          <p class="muted small">Duplicate canonical domains are rejected by the service worker.</p>
+  <main class="app-shell">
+    <header class="app-header">
+      <div class="brand-lockup">
+        <div class="brand-mark brand-mark-large" aria-hidden="true">
+          <span class="brand-screen"></span>
+          <span class="brand-play"></span>
+          <span class="brand-sweep"></span>
+          <span class="brand-signal"></span>
         </div>
-        <label>
-          Domain
-          <input id="profile-domain" type="text" placeholder="example.com" required autocomplete="off">
-        </label>
-        <label>
-          Label
-          <input id="profile-label" type="text" placeholder="Optional name" autocomplete="off">
-        </label>
-        <label>
-          Mode
-          <select id="profile-mode">
-            <option value="strict">Strict</option>
-            <option value="learn">Learn</option>
-            <option value="normal">Normal</option>
-          </select>
-        </label>
-        <button class="primary" type="submit">Add profile</button>
-      </form>
-
-      <form id="add-block" class="card stack">
         <div>
-          <h2>Global domain block list</h2>
-          <p class="muted small">These domains are blocked across protected and unprotected tabs.</p>
+          <div class="eyebrow"><span class="live-dot"></span> Control room</div>
+          <h1>Threatwatch</h1>
+          <p class="brand-line">Watching for threats while you watch.</p>
         </div>
-        <label>
-          Domain
-          <input id="block-domain" type="text" placeholder="bad.example" required autocomplete="off">
-        </label>
-        <button class="primary" type="submit">Block domain</button>
-        <div id="blocked-domains" class="tags"></div>
-      </form>
+      </div>
+
+      <div class="health-cluster">
+        <span class="health-label">Protection status</span>
+        <div class="row">
+          <span id="health" class="status">Loading</span>
+          <button id="retry" class="button ghost hidden" type="button">Retry sync</button>
+        </div>
+      </div>
+    </header>
+
+    <p id="message" class="message" role="status" aria-live="polite"></p>
+
+    <section class="stat-grid" aria-label="Threatwatch summary">
+      <article class="stat-card">
+        <span class="stat-kicker">Watchlist</span>
+        <strong id="profile-total" class="stat-value">0</strong>
+        <span class="stat-label">sites under watch</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-kicker">Live</span>
+        <strong id="profile-active" class="stat-value">0</strong>
+        <span class="stat-label">profiles active</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-kicker">Shielded</span>
+        <strong id="profile-shielded" class="stat-value">0</strong>
+        <span class="stat-label">Strict or Learn</span>
+      </article>
+      <article class="stat-card alert-stat">
+        <span class="stat-kicker">Caught</span>
+        <strong id="event-total" class="stat-value">0</strong>
+        <span class="stat-label">local threat events</span>
+      </article>
     </section>
 
-    <section class="section">
-      <div class="row between">
-        <div>
-          <h2>Protected sites</h2>
-          <p class="muted small">Normal logs unexpected web exits. Strict and Learn contain them.</p>
+    <section class="workspace-grid">
+      <section class="panel watchlist-panel" aria-labelledby="watchlist-title">
+        <div class="panel-header watchlist-header">
+          <div>
+            <div class="eyebrow">Site profiles</div>
+            <h2 id="watchlist-title">Your watchlist</h2>
+            <p class="muted">Compact by default. Open a site only when you need its controls.</p>
+          </div>
+          <div class="row compact-actions">
+            <button id="expand-visible" class="button ghost small-button" type="button">Open visible</button>
+            <button id="collapse-all" class="button ghost small-button" type="button">Close all</button>
+          </div>
         </div>
-      </div>
-      <div id="profiles" class="stack"></div>
+
+        <div class="watchlist-toolbar">
+          <label class="search-field">
+            <span class="sr-only">Search site profiles</span>
+            <span class="search-icon" aria-hidden="true"></span>
+            <input id="profile-search" type="search" placeholder="Search name or domain" autocomplete="off">
+            <kbd>/</kbd>
+          </label>
+
+          <label class="sort-field">
+            <span>Sort</span>
+            <select id="profile-sort">
+              <option value="activity">Recent activity</option>
+              <option value="name">Name</option>
+              <option value="events">Most catches</option>
+              <option value="mode">Watch mode</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="profile-filters" class="filter-strip" role="group" aria-label="Filter site profiles">
+          <button class="filter-chip active" type="button" data-profile-filter="all">All</button>
+          <button class="filter-chip" type="button" data-profile-filter="strict">Strict</button>
+          <button class="filter-chip" type="button" data-profile-filter="learn">Learn</button>
+          <button class="filter-chip" type="button" data-profile-filter="normal">Normal</button>
+          <button class="filter-chip" type="button" data-profile-filter="paused">Paused</button>
+        </div>
+
+        <div class="list-meta">
+          <span><strong id="profile-visible-count">0</strong> of <span id="profile-total-count">0</span> sites</span>
+          <span id="profile-filter-note" class="muted">Showing the full watchlist</span>
+        </div>
+
+        <div id="profiles" class="profile-list" aria-live="polite"></div>
+      </section>
+
+      <aside class="side-rail" aria-label="Watchlist tools">
+        <details class="panel disclosure-panel" open>
+          <summary>
+            <span>
+              <span class="summary-kicker">New channel</span>
+              <strong>Add a site</strong>
+            </span>
+            <span class="summary-icon" aria-hidden="true">+</span>
+          </summary>
+          <form id="add-profile" class="stack disclosure-content">
+            <p class="muted small">Add the exact hostname you want Threatwatch to monitor.</p>
+            <label>
+              Domain
+              <input id="profile-domain" type="text" placeholder="example.com" required autocomplete="off">
+            </label>
+            <label>
+              Display name
+              <input id="profile-label" type="text" placeholder="Optional" autocomplete="off">
+            </label>
+            <label>
+              Watch mode
+              <select id="profile-mode">
+                <option value="strict">Strict</option>
+                <option value="learn">Learn</option>
+                <option value="normal">Normal</option>
+              </select>
+            </label>
+            <button class="button primary" type="submit">Add to watchlist</button>
+          </form>
+        </details>
+
+        <details class="panel disclosure-panel">
+          <summary>
+            <span>
+              <span class="summary-kicker">Everywhere</span>
+              <strong>Global block list</strong>
+            </span>
+            <span id="blocked-count" class="counter-badge">0</span>
+          </summary>
+          <div class="disclosure-content stack">
+            <p class="muted small">These domains are blocked across protected and unprotected tabs.</p>
+            <form id="add-block" class="stack">
+              <label>
+                Domain
+                <input id="block-domain" type="text" placeholder="bad.example" required autocomplete="off">
+              </label>
+              <button class="button secondary" type="submit">Block domain</button>
+            </form>
+            <div id="blocked-domains" class="tags compact-tags"></div>
+          </div>
+        </details>
+
+        <section class="panel signal-guide">
+          <div class="eyebrow">Signal guide</div>
+          <h3>Watch modes</h3>
+          <dl class="mode-guide">
+            <div>
+              <dt><span class="mode-dot strict"></span>Strict</dt>
+              <dd>Stops unexpected exits and hostile actions.</dd>
+            </div>
+            <div>
+              <dt><span class="mode-dot learn"></span>Learn</dt>
+              <dd>Blocks like Strict and marks decisions for review.</dd>
+            </div>
+            <div>
+              <dt><span class="mode-dot normal"></span>Normal</dt>
+              <dd>Logs exits without blocking Strict-only actions.</dd>
+            </div>
+          </dl>
+        </section>
+      </aside>
     </section>
 
-    <section class="section card">
-      <div class="row between">
+    <section class="panel event-panel">
+      <div class="panel-header">
         <div>
-          <h2>Threat events</h2>
-          <p class="muted small">Stored locally with URL queries, fragments, credentials, and non-web payloads removed.</p>
+          <div class="eyebrow">Playback monitor</div>
+          <h2>Recent catches</h2>
+          <p class="muted">Local events only. Sensitive URL parts are removed before storage.</p>
         </div>
-        <button id="clear-events" class="danger">Clear events</button>
+        <button id="clear-events" class="button danger" type="button">Clear events</button>
       </div>
-      <div style="overflow:auto">
+
+      <div class="event-table-wrap">
         <table>
           <thead>
             <tr>
@@ -91,6 +205,11 @@
           </thead>
           <tbody id="events"></tbody>
         </table>
+        <div id="events-empty" class="empty-state hidden">
+          <span class="empty-screen" aria-hidden="true"></span>
+          <strong>No catches yet</strong>
+          <span>Threatwatch will list local interventions here.</span>
+        </div>
       </div>
     </section>
   </main>
